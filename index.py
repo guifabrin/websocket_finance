@@ -2,7 +2,8 @@ import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 
-from app.handlers import main_handler
+from app.handlers.http import main_handler
+from app.handlers.api.v1 import users_handler
 
 
 def make_app():
@@ -12,6 +13,7 @@ def make_app():
     }
     return tornado.web.Application([
         (r"/", main_handler.MainHandler),
+        (r"/api/v1/users", users_handler.UsersHandler),
         (r'/js/(.*)', tornado.web.StaticFileHandler,
          {'path': './dist/scripts'}),
         (r'/css/(.*)', tornado.web.StaticFileHandler,
