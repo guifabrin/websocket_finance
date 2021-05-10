@@ -1,0 +1,12 @@
+{
+  "devDependencies": {
+    "angular": "^1.8.2",
+    "webpack": "^5.37.0",
+    "webpack-cli": "^4.7.0"
+  },
+  "scripts": {
+    "dev": "webpack --mode development --progress",
+    "watch": "webpack --mode development --watch --progress",
+    "serve": "python3 index.py"
+  }
+}
