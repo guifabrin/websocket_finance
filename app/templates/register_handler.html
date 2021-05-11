@@ -1,0 +1,42 @@
+{% extends "../../templates/layouts/index.html" %}
+{% block title %}Register{% end %}
+{% block content %}
+ <md-content md-theme="docs-dark" layout-padding ng-controller="registerCtrl">
+    <form name="form" novalidate>
+        <md-input-container class="md-icon-float md-block">
+            <label>
+                Username:
+            </label>
+            <input name="username" type="text" ng-model="user.username" uniqueusername ng-minlength="5" ng-required="true"/>
+            <div ng-messages="form.username.$pending" md-auto-hide="false">        
+                <div ng-message="unique_username">Checking if this name is available...</div>
+            </div>
+            <div ng-messages="form.username.$error" multiple md-auto-hide="false">
+                <div ng-message="unique_username">This username is already taken!</div>
+                <div ng-message="minlength">Please enter atleast 5 characters</div>
+                <div ng-message="required">The value is required!</div>
+            </div>
+        </md-input-container>
+        <md-input-container>
+            <label>Password:</label>
+            <input name="password" type="password" ng-model="user.password" ng-minlength="5" ng-required="true"/>
+            <div ng-messages="form.password.$error" multiple md-auto-hide="false">
+                <div ng-message="minlength">Please enter atleast 5 characters</div>
+                <div ng-message="required">The value is required!</div>
+            </div>
+        </md-input-container>
+        <md-input-container>
+            <label>Confirm password:</label>
+            <input name="confirm_password" type="password" ng-model="user.confirm_password" ng-required="true" same_as="user.password"/>
+            <div ng-messages="form.confirm_password.$error" multiple md-auto-hide="false">
+                <div ng-message="minlength">Please enter atleast 5 characters</div>
+                <div ng-message="required">The value is required!</div>
+                <div ng-message="same_as">The value needs be same as password!</div>
+            </div>
+        </md-input-container>
+        <div>
+            <md-button class="md-raised md-primary" ng-click="create()">Criar</md-button>
+        </div>
+    </form>
+</md-content>
+{% end %}

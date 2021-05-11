@@ -7,10 +7,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Default title{% end %}</title>
 </head>
-<body ng-app="myApp">
+<body ng-app="myApp" layout="column" ng-cloak class="md-inline-form">
     <div ng-controller="mainCtrl">
-        Full Name: <{firstName + " " + lastName}>
     </div>
+    {% block content %}
+    
+    {% end %}
     <script src="./js/index.js"></script>
 </body>
 </html>
