@@ -2,7 +2,7 @@ import tornado.ioloop
 import tornado.web
 import tornado.httpserver
 
-from app.handlers.http import main_handler, register_handler, login_handler, feed_handler
+from app.handlers.http import http_handler
 from app.handlers.api.v1 import users_handler, posts_handler
 from app.repositories import user_repository, post_repository
 from app.database.database import create
@@ -15,10 +15,12 @@ def make_app():
     main_user_repository = user_repository.UserRepository()
     main_post_repository = post_repository.PostRepository()
     return tornado.web.Application([
-        (r"/", main_handler.MainHandler),
-        (r"/register", register_handler.RegisterHandler),
-        (r"/login", login_handler.LoginHandler),
-        (r"/feed", feed_handler.FeedHandler),
+        (r"/", http_handler.HttpHandler, dict(template='main_handler')),
+        (r"/register", http_handler.HttpHandler,
+         dict(template='register_handler')),
+        (r"/login", http_handler.HttpHandler,
+         dict(template='login_handler')),
+        (r"/feed", http_handler.HttpHandler, dict(template='feed_handler')),
         (r'/api/v1/users/?(.*)?', users_handler.UsersHandler,
          dict(repository=main_user_repository)),
         (r'/api/v1/posts/?(.*)?', posts_handler.PostsHandler,
