@@ -24,7 +24,7 @@ class Post(Base, SerializerMixin):
     def __eq__(self, other):
         return type(self) == type(other) and \
             self.post_id == other.post_id and \
-            self.author_id == other.author_id and \
+            self.author == other.author and \
             self.created == other.created and \
             self.title == other.title and \
             self.body == other.body
