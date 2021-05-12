@@ -73,7 +73,7 @@ class CrudHandler(RequestHandler):
             return self.repository.get_by_id(key)
 
     @handle()
-    def post(self):
+    def post(self, _):
         return self.repository.save(json.loads(self.request.body))
 
     @handle()
