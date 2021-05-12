@@ -3,7 +3,7 @@ import tornado.web
 import tornado.httpserver
 
 from app.handlers.http import http_handler
-from app.handlers.api.v1 import users_handler, posts_handler
+from app.handlers.api.v1 import users_handler, crud_handler
 from app.repositories import user_repository, post_repository
 from app.database.database import create
 
@@ -23,7 +23,7 @@ def make_app():
         (r"/feed", http_handler.HttpHandler, dict(template='feed_handler')),
         (r'/api/v1/users/?(.*)?', users_handler.UsersHandler,
          dict(repository=main_user_repository)),
-        (r'/api/v1/posts/?(.*)?', posts_handler.PostsHandler,
+        (r'/api/v1/posts/?(.*)?', crud_handler.CrudHandler,
          dict(repository=main_post_repository)),
         (r'/js/(.*)', tornado.web.StaticFileHandler,
          {'path': './dist/scripts'}),

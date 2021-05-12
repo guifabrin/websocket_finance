@@ -7,12 +7,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Default title{% end %}</title>
 </head>
+
 <body ng-app="myApp" layout="column" ng-cloak class="md-inline-form">
     <div ng-controller="mainCtrl">
+        <md-content class="md-padding">
+            <md-nav-bar md-no-ink-bar="disableInkBar" md-selected-nav-item="currentPage"
+                nav-bar-aria-label="navigation links">
+                <md-nav-item ng-repeat="page in pages" md-nav-click="goto(page.path)" name="<{page.path}>">
+                    <{page.name}>
+                </md-nav-item>
+            </md-nav-bar>
+        </md-content>
+        {% block content %}
+
+        {% end %}
     </div>
-    {% block content %}
-    
-    {% end %}
     <script src="./js/index.js"></script>
 </body>
+
 </html>
