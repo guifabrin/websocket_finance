@@ -1,6 +1,7 @@
 import functools
 from http import HTTPStatus
 import json
+import hashlib
 
 from .base_handler import BaseHandler
 from ....exceptions.entity_not_found import EntityNotFound
@@ -37,7 +38,9 @@ class CrudHandler(BaseHandler):
 
     @handle()
     def post(self, key):
-        return self.repository.save(json.loads(self.request.body))
+        user = json.loads(self.request.body)
+        user['password'] = hashlib.md5(user['password'].encode()).hexdigest()
+        return self.repository.save(user)
 
     @handle()
     def put(self, key):

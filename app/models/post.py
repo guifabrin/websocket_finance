@@ -12,7 +12,7 @@ class Post(Base, SerializerMixin):
     __tablename__ = "posts"
 
     post_id = Column(Integer, primary_key=True, autoincrement=True)
-    author_id = Column(Integer, ForeignKey(User.user_id))
+    author = Column(String, ForeignKey(User.username))
     created = Column(DateTime, default=datetime.utcnow)
     title = Column(String)
     body = Column(String)

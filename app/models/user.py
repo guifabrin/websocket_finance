@@ -8,8 +8,7 @@ class User(Base, SerializerMixin):
 
     __tablename__ = "users"
 
-    user_id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String, unique=True)
+    username = Column(String, unique=True, primary_key=True)
     password = Column(String)
 
     def update(self, other):
@@ -18,6 +17,5 @@ class User(Base, SerializerMixin):
 
     def __eq__(self, other):
         return type(self) == type(other) and \
-            self.user_id == other.user_id and \
             self.username == other.username and \
             self.password == other.password

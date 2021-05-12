@@ -2,7 +2,6 @@
 {% block title %}Register{% end %}
 {% block content %}
  <md-content md-theme="docs-dark" layout-padding ng-controller="registerCtrl">
-    <{error}>
     <form name="form" novalidate>
         <md-input-container class="md-icon-float md-block">
             <label>
@@ -36,7 +35,7 @@
             </div>
         </md-input-container>
         <div>
-            <md-button ng-disabled="!valid(form.$error)" class="md-raised md-primary" ng-click="create()">Criar</md-button>
+            <md-button ng-disabled="!valid(form.$error)" class="md-raised md-primary" ng-click="create()">Create</md-button>
         </div>
     </form>
 </md-content>

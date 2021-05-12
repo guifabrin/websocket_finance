@@ -6,6 +6,8 @@ import sameAsDirective from './directives/sameAsDirective'
 import angular from 'angular'
 import 'angular-messages'
 import 'angular-material'
+import mainCtrl from './controllers/mainCtrl';
+import loginCtrl from './controllers/loginCtrl';
 import registerCtrl from './controllers/registerCtrl';
 
 var app = angular.module('myApp', ['ngMaterial', 'ngMessages'], function ($interpolateProvider) {
@@ -13,7 +15,8 @@ var app = angular.module('myApp', ['ngMaterial', 'ngMessages'], function ($inter
     $interpolateProvider.endSymbol('}>');
 });
 
-app.controller('mainCtrl', require('./controllers/mainCtrl'));
+app.controller('mainCtrl', mainCtrl);
+app.controller('loginCtrl', loginCtrl);
 app.controller('registerCtrl', registerCtrl);
 
 app.directive('uniqueUsername', uniqueUsernameDirective);
