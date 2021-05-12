@@ -2,12 +2,13 @@
 {% block title %}Register{% end %}
 {% block content %}
  <md-content md-theme="docs-dark" layout-padding ng-controller="registerCtrl">
+    <{error}>
     <form name="form" novalidate>
         <md-input-container class="md-icon-float md-block">
             <label>
                 Username:
             </label>
-            <input name="username" type="text" ng-model="user.username" uniqueusername ng-minlength="5" ng-required="true"/>
+            <input name="username" type="text" ng-model="user.username" unique_username ng-minlength="5" ng-required="true"/>
             <div ng-messages="form.username.$pending" md-auto-hide="false">        
                 <div ng-message="unique_username">Checking if this name is available...</div>
             </div>
@@ -35,7 +36,7 @@
             </div>
         </md-input-container>
         <div>
-            <md-button class="md-raised md-primary" ng-click="create()">Criar</md-button>
+            <md-button ng-disabled="!valid(form.$error)" class="md-raised md-primary" ng-click="create()">Criar</md-button>
         </div>
     </form>
 </md-content>
