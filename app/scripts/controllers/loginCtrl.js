@@ -1,5 +1,4 @@
 import HttpStatus from '../helpers/HttpStatus';
-import md5 from 'md5'
 
 export default function ($scope, $mdDialog) {
 
@@ -13,23 +12,21 @@ export default function ($scope, $mdDialog) {
     }
 
     $scope.login = () => {
-        fetch(`/api/v1/users/${$scope.user.username}`).then((response) => {
+        fetch('/api/v1/auth', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify($scope.user)
+        }).then(response => {
             if (response.status == HttpStatus.OK) {
-                response.json().then((user) => {
-                    if (user.password == md5($scope.user.password)) {
-                        window.location.href = "/feed";
-                    } else {
-                        $mdDialog.show(
-                            $mdDialog.alert()
-                                .clickOutsideToClose(true)
-                                .title('Error')
-                                .textContent('Wrong password')
-                                .ok('Got it!')
-                        );
-                    }
-                });
+                response.json().then(uuid => {
+                    localStorage.setItem('auth', btoa(`${$scope.user.username}:${uuid}`))
+                    window.location.href = "/feed";
+                })
             } else {
-                response.json().then((json) => {
+                response.json().then(json => {
                     $mdDialog.show(
                         $mdDialog.alert()
                             .clickOutsideToClose(true)
@@ -37,6 +34,8 @@ export default function ($scope, $mdDialog) {
                             .textContent(json.message)
                             .ok('Got it!')
                     );
+                    $scope.creating = false;
+                    $scope.$apply();
                 })
             }
         })
