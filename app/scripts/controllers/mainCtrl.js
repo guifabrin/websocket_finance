@@ -1,13 +1,18 @@
 import URLHelper from '../helpers/URLHelper'
 
 export default function ($scope, $mdDialog) {
-    $scope.auth = localStorage.getItem('auth');
-    $scope.message = URLHelper.getParam('message');
+    try {
+        $scope.auth = localStorage.getItem('auth');
+        $scope.message = URLHelper.getParam('message');
+        if ($scope.auth)
+            [$scope.username] = atob($scope.auth).split(':');
+    } catch (e) {
+        $scope.username = '';
+    }
     $scope.pages = [
         { path: '/', name: 'Home' },
     ]
-    if ($scope.auth) {
-        [$scope.username] = atob($scope.auth).split(':');
+    if ($scope.username) {
         $scope.pages.push({ path: '/feed', name: 'Feed' })
         $scope.pages.push({ path: '/user', name: $scope.username })
     } else {
