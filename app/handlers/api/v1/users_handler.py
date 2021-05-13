@@ -1,12 +1,12 @@
 from .crud_handler import CrudHandler
 import json
 import hashlib
-from ....exceptions.entity_not_found import EntityNotFound
+from ....decorators import handler_decorator
 
 
 class UsersHandler(CrudHandler):
 
-    @CrudHandler.handle()
+    @handler_decorator.HandlerDecorator.handle()
     def post(self, key):
         user = json.loads(self.request.body)
         user['password'] = hashlib.md5(user['password'].encode()).hexdigest()
