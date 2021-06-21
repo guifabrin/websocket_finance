@@ -1,12 +1,14 @@
 from contextlib import contextmanager
 
-from ..exceptions.entity_not_found import EntityNotFound
 from ..database.database import Session
+from ..exceptions.entity_not_found import EntityNotFound
 
 
-class BaseRepository():
-
+class BaseRepository:
     entity = NotImplementedError
+
+    def __init__(self, entity):
+        self.entity = entity
 
     @contextmanager
     def command_session_scope(self):
@@ -33,32 +35,75 @@ class BaseRepository():
         finally:
             session.close()
 
-    def get_all(self):
+    def get_all(self, user=None):
         with self.query_session_scope() as session:
-            return session.query(self.entity).all()
+            all = session.query(self.entity).all()
+            if user:
+                if len(list(filter(lambda role: role.id == 1, user.roles))) > 0:
+                    return all
+                return list(filter(lambda item: item.user_id == user.id, all))
+            else:
+                return all
 
-    def get_by_id(self, entity_id):
+    def get_by(self, parameter, value, user=None, b_raise=True):
+        with self.command_session_scope() as session:
+            if user:
+                result = session.query(self.entity).filter(
+                    getattr(self.entity, parameter) == value and self.entity.user == user).scalar()
+            else:
+                result = session.query(self.entity).filter(getattr(self.entity, parameter) == value).scalar()
+            if not result and b_raise:
+                raise EntityNotFound
+            elif not result and not b_raise:
+                return None
+            return result
+
+    def get_by_id(self, entity_id, user=None):
+        with self.command_session_scope() as session:
+            if user:
+                if hasattr(self.entity, 'user'):
+                    list_transactions = list(
+                        filter(lambda transaction: transaction.id == int(entity_id), self.get_all(user)));
+                    if len(list_transactions) > 0:
+                        result = list_transactions[0]
+                elif len(list(filter(lambda role: role.id == 1, user.roles))) > 0:
+                    result = session.query(self.entity).get(entity_id)
+            if not result:
+                raise EntityNotFound
+            return result
+
+    def get_by_id_root(self, entity_id):
         with self.command_session_scope() as session:
             result = session.query(self.entity).get(entity_id)
             if not result:
                 raise EntityNotFound
             return result
 
-    def save(self, entity):
+    def save(self, entity, user=None):
         with self.command_session_scope() as session:
-            return session.add(self.entity(**entity))
+            flushed = self.entity(**entity)
+            if user:
+                flushed.user = user
+            session.add(flushed)
+            session.flush()
+            return flushed
 
-    def put(self, entity_id, entity):
+    def save_root(self, entity):
         with self.command_session_scope() as session:
-            _entity = session.query(self.entity).get(entity_id)
-            if not _entity:
-                raise EntityNotFound
-            _entity.update(self.entity(**entity))
-            return True
+            session.add(entity)
+            session.flush()
+            return entity
 
-    def delete(self, entity_id):
+    def put(self, entity_id, entity, user):
+        _entity = self.get_by_id(entity_id, user)
+        if not _entity:
+            raise EntityNotFound
+        _entity.update(self.entity(**entity))
+        return True
+
+    def delete(self, entity_id, user):
         with self.command_session_scope() as session:
-            entity = session.query(self.entity).get(entity_id)
+            entity = self.get_by_id(entity_id, user)
             if not entity:
                 raise EntityNotFound
             session.delete(entity)
