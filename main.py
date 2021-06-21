@@ -1,16 +1,17 @@
+import datetime
+import sched
+import threading
+import time
+
+import tornado.httpserver
 import tornado.ioloop
 import tornado.web
-import tornado.httpserver
 
-from app.handlers.v1 import CrudHandler, UsersHandler
-from app.repositories.user_repository import UserRepository
 from app.database.database import create
-from app.repositories.base_repository import BaseRepository
+from app.handlers.v1 import CrudHandler, UsersHandler
 from app.models import Transaction, Account, Invoice, Role, RoleUser
-import datetime
-import sched, time
-
-import threading
+from app.repositories.base_repository import BaseRepository
+from app.repositories.user_repository import UserRepository
 
 s = sched.scheduler(time.time, time.sleep)
 
@@ -137,7 +138,7 @@ def run_automated(name):
                     sync_banco_do_brasil_cc(args[2], args[3], args[4], int(args[1]))
             except Exception as e:
                 print('Error', e)
-        time.sleep(60*60)
+        time.sleep(60 * 60)
 
 
 if __name__ == "__main__":
@@ -145,7 +146,7 @@ if __name__ == "__main__":
         for conns in proc.connections(kind='inet'):
             if conns.laddr.port == 8888:
                 proc.send_signal(SIGTERM)  # or SIGKILL
-                print("Kill sign sent to program using "+str(conns.laddr))
+                print("Kill sign sent to program using " + str(conns.laddr))
     create()
     app = make_app()
     x = threading.Thread(target=run_automated, args=(1,))
