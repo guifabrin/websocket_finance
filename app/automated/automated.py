@@ -3,6 +3,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
+from selenium.webdriver.common.action_chains import ActionChains
 
 from datetime import datetime
 
@@ -166,3 +167,57 @@ def caixa(usuario, senha):
         print('Error caixa', e)
     driver.quit()
     return transactions
+
+
+def banco_inter_cc(conta, senha, account_id):
+    transactions = []
+    driver = webdriver.Chrome('./app/automated/chromedriver.exe')
+    try:
+        driver.get("https://internetbanking.bancointer.com.br/")
+        driver.set_window_size(1305, 883)
+        driver.find_element(By.ID, "loginv20170605").click()
+        driver.find_element(By.ID, "loginv20170605").send_keys(conta)
+        driver.find_element(By.NAME, "j_idt35").click()
+        driver.find_element(By.ID, "j_idt159").click()
+        driver.execute_script(
+            "pass=\""+senha+"\",i=0,b=!0,fn=(()=>{pass[i]?(j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err \"+pass[i]),document.querySelector(\'[title=\"▲\"]\')&&document.querySelector(\'[title=\"▲\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err2 \"+pass[i]),document.querySelector(\'[title=\"ABC\"]\')?document.querySelector(\'[title=\"ABC\"]\').click():document.querySelector(\'[title=\"!?.\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):console.log(\"err3 \"+pass[i]))),setTimeout(fn,300)):document.querySelector(\'[title=\"Confirmar\"]\').click()}),setTimeout(fn,300);")
+        WebDriverWait(driver, 30000).until(
+            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".grid-35")))
+        isafe = input('isafe inter')
+        driver.find_element(By.ID, "codigoAutorizacaoAOTP").send_keys(isafe)
+        driver.find_element(By.ID, "confirmarCodigoTransacaoAOTP").click()
+        WebDriverWait(driver, 5).until(
+            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#j_idt106\\3A 4\\3Aj_idt109 span")))
+        driver.find_element(By.CSS_SELECTOR, "#j_idt106\\3A 4\\3Aj_idt109 span").click()
+        element = driver.find_element(By.CSS_SELECTOR, "#j_idt106\\3A 4\\3Aj_idt109 span")
+        actions = ActionChains(driver)
+        actions.move_to_element(element).perform()
+        driver.find_element(By.CSS_SELECTOR, ".cf:nth-child(1) a").click()
+        driver.find_element(By.NAME, "j_idt146:0:j_idt298").click()
+        driver.find_element(By.NAME, "j_idt210").click()
+        lines = driver.find_element(By.CSS_SELECTOR, "[role=\"grid\"]").find_elements_by_css_selector('tr')
+        for line in lines:
+            if line.get_attribute('innerText') is None:
+                continue
+            columns = line.find_elements_by_css_selector('td')
+            if len(columns) >= 4:
+                try:
+                    dd, mm, yyyy = columns[3].get_attribute('innerText').replace('\xa0', '').split('/')
+                    date = datetime.fromisoformat(yyyy + '-' + mm + '-' + dd)
+                    valor = columns[4].get_attribute('innerText').replace('\xa0', '').replace('.', '').replace(',',
+                                                                                                               '.').replace(
+                        'R$', '')
+                    valor = float(valor) * -1
+                    transaction = Transaction()
+                    transaction.value = valor
+                    transaction.description = columns[1].get_attribute('innerText').replace('\xa0', '').replace("\n", " ")
+                    transaction.date = date
+                    transaction.paid = True
+                    transactions.append(transaction)
+                except:
+                    pass
+    except Exception as e:
+        print('Error banco inter', e)
+    driver.quit()
+    return transactions
+
