@@ -137,7 +137,7 @@ def run_automated(name):
                 elif args[0] == 'banco_do_brasil_cc':
                     sync_banco_do_brasil_cc(args[2], args[3], args[4], int(args[1]))
             except Exception as e:
-                print('Error', e)
+                print('Error', e, args)
         time.sleep(60 * 60)
 
 

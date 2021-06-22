@@ -244,8 +244,8 @@ class Transaction(Base, SerializerMixin):
         return None
 
     def update(self, other):
-        if other.paid:
-            self.paid = other.paid
+        if hasattr(other, 'paid'):
+            self.paid = 1 if other.paid else 0
 
 
 class CategoryTransaction(Base, SerializerMixin):

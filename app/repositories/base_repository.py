@@ -99,6 +99,9 @@ class BaseRepository:
         if not _entity:
             raise EntityNotFound
         _entity.update(self.entity(**entity))
+        with self.command_session_scope() as session:
+            session.query(self.entity).filter(self.entity.id == _entity.id).update(entity)
+            session.flush()
         return True
 
     def delete(self, entity_id, user):
