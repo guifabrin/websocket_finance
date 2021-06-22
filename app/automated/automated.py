@@ -169,7 +169,7 @@ def caixa(usuario, senha):
     return transactions
 
 
-def banco_inter_cc(conta, senha, account_id):
+def banco_inter_cc(conta, senha, isafe):
     transactions = []
     driver = webdriver.Chrome('./app/automated/chromedriver.exe')
     try:
@@ -183,7 +183,7 @@ def banco_inter_cc(conta, senha, account_id):
             "pass=\""+senha+"\",i=0,b=!0,fn=(()=>{pass[i]?(j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err \"+pass[i]),document.querySelector(\'[title=\"▲\"]\')&&document.querySelector(\'[title=\"▲\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err2 \"+pass[i]),document.querySelector(\'[title=\"ABC\"]\')?document.querySelector(\'[title=\"ABC\"]\').click():document.querySelector(\'[title=\"!?.\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):console.log(\"err3 \"+pass[i]))),setTimeout(fn,300)):document.querySelector(\'[title=\"Confirmar\"]\').click()}),setTimeout(fn,300);")
         WebDriverWait(driver, 30000).until(
             expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".grid-35")))
-        isafe = input('isafe inter')
+        #isafe = input('isafe inter')
         driver.find_element(By.ID, "codigoAutorizacaoAOTP").send_keys(isafe)
         driver.find_element(By.ID, "confirmarCodigoTransacaoAOTP").click()
         WebDriverWait(driver, 5).until(

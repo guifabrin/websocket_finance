@@ -53,6 +53,7 @@ class BaseHandler(RequestHandler):
         except:
             return json.dumps(result)
 
+
 class CrudHandler(BaseHandler, ABC):
     repository = NotImplementedError
     user_repository = NotImplementedError
@@ -109,3 +110,165 @@ class UsersHandler(CrudHandler):
         user = json.loads(self.request.body)
         user['password'] = bcrypt.hashpw(user['password'].encode(), bcrypt.gensalt())
         return self.repository.save(user)
+
+
+from app.automated.automated import banco_do_brasil, banco_do_brasil_cc, caixa, banco_inter_cc
+import os.path
+from app.models import Invoice
+import datetime
+import threading
+
+class AutomatedHandler(RequestHandler):
+    transaction_repository = NotImplementedError
+    user_repository = NotImplementedError
+    invoice_repository = NotImplementedError
+    accounts_repository = NotImplementedError
+
+    def initialize(self, transaction_repository, user_repository, invoice_repository, accounts_repository):
+        self.transaction_repository = transaction_repository
+        self.user_repository = user_repository
+        self.invoice_repository = invoice_repository
+        self.accounts_repository = accounts_repository
+
+    def auth_value(self):
+        if self.b_auth:
+            try:
+                email, password = basicauth.decode(self.request.headers['Authorization'])
+                user = self.user_repository.get_by('email', email)
+                password_bytes = user.password if isinstance(user.password, bytes) else user.password.encode('utf-8')
+                if user and bcrypt.checkpw(password.encode('utf-8'), password_bytes):
+                    return user
+                else:
+                    raise NotAllowed
+            except:
+                raise NotAllowed
+        else:
+            return None
+
+    def post(self, account_id):
+        self.run_automated(int(account_id), str(self.request.body))
+        pass
+
+    def sync_banco_do_brasil(self, agency, account, password, account_id):
+        transactions = banco_do_brasil(agency, account, password)
+        transactions2 = self.accounts_repository.get_by_id_root(account_id).transactions
+        for transaction in transactions:
+            contains = False
+            for transaction2 in transactions2:
+                if transaction2.value == transaction.value and (transaction.date.date() - transaction2.date).days == 0:
+                    contains = True
+                    break
+            if not contains:
+                transaction.account_id = account_id
+                transaction.paid = True
+                print(self.transactions_repository.save_root(transaction))
+
+    def sync_banco_do_brasil_cc(self, agency, account, password, account_id):
+        transactions = banco_do_brasil_cc(agency, account, password)
+        account = self.accounts_repository.get_by_id_root(account_id)
+        now = datetime.datetime.now()
+        endYear = now.year
+        endMonth = now.month
+        if (now.month == 12):
+            endMonth = -1
+            endYear = now.year + 1
+        dateInit = datetime.datetime(now.year, now.month + 1, 1, 0, 0, 0);
+        dateEnd = datetime.datetime(endYear, endMonth + 2, 1, 0, 0, 0);
+        invoices = list(
+            filter(lambda invoice: dateInit.date() <= invoice.debit_date < dateEnd.date(), account.invoices))
+        if len(invoices) == 0:
+            invoice = Invoice()
+            invoice.debit_date = dateInit + (dateEnd - dateInit) / 2
+            invoice.description = 'Automated'
+            invoice.date_init = dateInit
+            invoice.date_end = dateEnd
+            invoice.account = account
+            print(self.invoice_repository.save_root(invoice))
+        else:
+            invoice = invoices[0]
+        transactions2 = invoice.transactions
+        for transaction in transactions:
+            contains = False
+            for transaction2 in transactions2:
+                if transaction2.value == transaction.value and (transaction.date.date() - transaction2.date).days == 0:
+                    contains = True
+                    break
+            if not contains:
+                transaction.account_id = account_id
+                transaction.paid = True
+                transaction.invoice = invoice
+                print(self.transactions_repository.save_root(transaction))
+
+    def sync_caixa(self, username, password, account_id):
+        transactions = caixa(username, password)
+        transactions2 = self.accounts_repository.get_by_id_root(account_id).transactions
+        for transaction in transactions:
+            contains = False
+            for transaction2 in transactions2:
+                if transaction2.value == transaction.value and (transaction.date.date() - transaction2.date).days == 0:
+                    contains = True
+                    break
+            if not contains:
+                transaction.account_id = account_id
+                transaction.paid = True
+                print(self.transactions_repository.save_root(transaction))
+
+    def sync_banco_inter_cc(self, agency, password, account_id, isafe):
+        transactions = banco_inter_cc(agency, password, isafe)
+        account = self.accounts_repository.get_by_id_root(account_id)
+        now = datetime.datetime.now()
+        endYear = now.year
+        endMonth = now.month
+        if (now.month == 12):
+            endMonth = -1
+            endYear = now.year + 1
+        dateInit = datetime.datetime(now.year, now.month + 1, 1, 0, 0, 0);
+        dateEnd = datetime.datetime(endYear, endMonth + 2, 1, 0, 0, 0);
+        invoices = list(
+            filter(lambda invoice: dateInit.date() <= invoice.debit_date < dateEnd.date(), account.invoices))
+        if len(invoices) == 0:
+            invoice = Invoice()
+            invoice.debit_date = dateInit + (dateEnd - dateInit) / 2
+            invoice.description = 'Automated'
+            invoice.date_init = dateInit
+            invoice.date_end = dateEnd
+            invoice.account = account
+            print(self.invoice_repository.save_root(invoice))
+        else:
+            invoice = invoices[0]
+        transactions2 = invoice.transactions
+        for transaction in transactions:
+            contains = False
+            for transaction2 in transactions2:
+                if transaction2.value == transaction.value and (transaction.date.date() - transaction2.date).days == 0:
+                    contains = True
+                    break
+            if not contains:
+                transaction.account_id = account_id
+                transaction.paid = True
+                transaction.invoice = invoice
+                print(self.transactions_repository.save_root(transaction))
+
+    def run_automated(self, account_id, extra):
+        filename = ".automated"
+        if not os.path.isfile(filename):
+            return
+        with open(filename) as f:
+            content = f.readlines()
+        for line in content:
+            args = line.split(',')
+            if account_id != int(args[1]):
+                continue
+            try:
+                if args[0] == 'caixa':
+                    self.sync_caixa(args[2], args[3], int(args[1]))
+                elif args[0] == 'banco_do_brasil':
+                    self.sync_banco_do_brasil(args[2], args[3], args[4], int(args[1]))
+                elif args[0] == 'banco_do_brasil_cc':
+                    self.sync_banco_do_brasil_cc(args[2], args[3], args[4], int(args[1]))
+                elif args[0] == 'banco_inter_cc':
+                    self.sync_banco_inter_cc(args[2], args[3], int(args[1]), extra)
+            except Exception as e:
+                print('Error', e, args)
+        #time.sleep(60 * 60)
+
