@@ -6,6 +6,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 
 from .database.database import Base
 
+import os.path
 
 class Config(Base, SerializerMixin):
     __tablename__ = 'configs'
@@ -85,7 +86,7 @@ class Account(Base, SerializerMixin):
     _transactions = relationship("Transaction", back_populates="account", lazy='subquery')
     invoices = relationship("Invoice", back_populates="account", lazy='subquery')
 
-    serialize_only = ('id', 'description', 'is_credit_card', 'transactions', 'invoices')
+    serialize_only = ('id', 'description', 'is_credit_card', 'transactions', 'invoices', 'automated', 'automated_body')
 
     @property
     def transactions(self):
@@ -93,6 +94,34 @@ class Account(Base, SerializerMixin):
             return []
         else:
             return self._transactions
+
+    @property
+    def automated(self):
+        filename = ".automated"
+        if not os.path.isfile(filename):
+            return False
+        with open(filename) as f:
+            content = f.readlines()
+        for line in content:
+            args = line.split(',')
+            if args[1] != '' and self.id == int(args[1]):
+                return True
+        return False
+
+
+    @property
+    def automated_body(self):
+        filename = ".automated"
+        if not os.path.isfile(filename):
+            return False
+        with open(filename) as f:
+            content = f.readlines()
+        for line in content:
+            args = line.split(',')
+            if args[1] != '' and self.id == int(args[1]) and args[0] == 'banco_inter_cc':
+                return True
+        return False
+
 
 
 class Category(Base, SerializerMixin):

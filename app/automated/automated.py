@@ -26,10 +26,13 @@ def banco_do_brasil(agencia, conta, senha):
         WebDriverWait(driver, 5).until(
             expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#senhaConta")))
         driver.find_element(By.ID, "senhaConta").send_keys(senha)
-        driver.find_element(By.ID, "botaoEnviar").click()
+        try:
+            driver.find_element(By.ID, "botaoEnviar").click()
+        except:
+            pass
         WebDriverWait(driver, 5).until(
             expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".menu-completo > .menu-itens")))
-        driver.execute_script("document.querySelector(\'[codigo=\"3469\"]\').click()")
+        driver.execute_script("document.querySelector(\'[codigo=\"32456\"]\').click()")
         WebDriverWait(driver, 5).until(
             expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#tabelaExtrato")))
         lines = driver.find_element(By.ID, "tabelaExtrato").find_elements_by_css_selector('tr')

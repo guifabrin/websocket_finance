@@ -124,6 +124,14 @@ class AutomatedHandler(RequestHandler):
     invoice_repository = NotImplementedError
     accounts_repository = NotImplementedError
 
+    def set_default_headers(self):
+        self.set_header("access-control-allow-origin", "*")
+        self.set_header("Content-Type", "application/json")
+        self.set_header("Access-Control-Allow-Headers", "x-requested-with")
+        self.set_header('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS')
+        # HEADERS!
+        self.set_header("Access-Control-Allow-Headers", "access-control-allow-origin,authorization,content-type")
+
     def initialize(self, transaction_repository, user_repository, invoice_repository, accounts_repository):
         self.transaction_repository = transaction_repository
         self.user_repository = user_repository
@@ -145,9 +153,14 @@ class AutomatedHandler(RequestHandler):
         else:
             return None
 
+    def options(self, key):
+        self.set_status(204)
+        self.finish()
+
     def post(self, account_id):
         self.run_automated(int(account_id), str(self.request.body))
-        pass
+        self.set_status(204)
+        self.finish()
 
     def sync_banco_do_brasil(self, agency, account, password, account_id):
         transactions = banco_do_brasil(agency, account, password)
@@ -161,7 +174,7 @@ class AutomatedHandler(RequestHandler):
             if not contains:
                 transaction.account_id = account_id
                 transaction.paid = True
-                print(self.transactions_repository.save_root(transaction))
+                print(self.transaction_repository.save_root(transaction))
 
     def sync_banco_do_brasil_cc(self, agency, account, password, account_id):
         transactions = banco_do_brasil_cc(agency, account, password)
@@ -197,7 +210,7 @@ class AutomatedHandler(RequestHandler):
                 transaction.account_id = account_id
                 transaction.paid = True
                 transaction.invoice = invoice
-                print(self.transactions_repository.save_root(transaction))
+                print(self.transaction_repository.save_root(transaction))
 
     def sync_caixa(self, username, password, account_id):
         transactions = caixa(username, password)
@@ -211,7 +224,7 @@ class AutomatedHandler(RequestHandler):
             if not contains:
                 transaction.account_id = account_id
                 transaction.paid = True
-                print(self.transactions_repository.save_root(transaction))
+                print(self.transaction_repository.save_root(transaction))
 
     def sync_banco_inter_cc(self, agency, password, account_id, isafe):
         transactions = banco_inter_cc(agency, password, isafe)
@@ -247,7 +260,7 @@ class AutomatedHandler(RequestHandler):
                 transaction.account_id = account_id
                 transaction.paid = True
                 transaction.invoice = invoice
-                print(self.transactions_repository.save_root(transaction))
+                print(self.transaction_repository.save_root(transaction))
 
     def run_automated(self, account_id, extra):
         filename = ".automated"
@@ -257,7 +270,7 @@ class AutomatedHandler(RequestHandler):
             content = f.readlines()
         for line in content:
             args = line.split(',')
-            if account_id != int(args[1]):
+            if args[1]!='' and account_id != int(args[1]):
                 continue
             try:
                 if args[0] == 'caixa':
@@ -270,5 +283,4 @@ class AutomatedHandler(RequestHandler):
                     self.sync_banco_inter_cc(args[2], args[3], int(args[1]), extra)
             except Exception as e:
                 print('Error', e, args)
-        #time.sleep(60 * 60)
 
