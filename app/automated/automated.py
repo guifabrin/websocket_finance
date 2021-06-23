@@ -77,10 +77,13 @@ def banco_do_brasil_cc(agencia, conta, senha):
         WebDriverWait(driver, 30000).until(
             expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#senhaConta")))
         driver.find_element(By.ID, "senhaConta").send_keys(senha)
-        driver.find_element(By.ID, "botaoEnviar").click()
+        try:
+            driver.find_element(By.ID, "botaoEnviar").click()
+        except:
+            pass
         WebDriverWait(driver, 30000).until(
             expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".menu-completo > .menu-itens")))
-        driver.execute_script("document.querySelector(\'[codigo=\"3580\"]\').click()")
+        driver.execute_script("document.querySelector(\'[codigo=\"32715\"]\').click()")
         WebDriverWait(driver, 30000).until(
             expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#carousel-cartoes img")))
         cartoes = driver.find_elements(By.CSS_SELECTOR, "#carousel-cartoes img")
