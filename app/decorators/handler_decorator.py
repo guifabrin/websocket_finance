@@ -1,8 +1,8 @@
 import functools
-#from http import HTTPStatus
 
 from ..exceptions.entity_not_found import EntityNotFound
 from ..exceptions.not_allowed import NotAllowed
+
 
 def handle():
     def decorator(function):
@@ -25,5 +25,3 @@ def handle():
         return wrapper
 
     return decorator
-
-

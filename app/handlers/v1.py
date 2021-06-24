@@ -1,14 +1,13 @@
-from tornado.web import RequestHandler
-
+import json
 from abc import ABC
 
 import basicauth
-from app.exceptions.not_allowed import NotAllowed
-import json
-
 import bcrypt
-from ..decorators import handler_decorator
+from tornado.web import RequestHandler
+
+from app.exceptions.not_allowed import NotAllowed
 from app.models import Transaction
+from ..decorators import handler_decorator
 
 
 class BaseHandler(RequestHandler):
@@ -117,7 +116,6 @@ from app.automated.automated import banco_do_brasil, banco_do_brasil_cc, caixa, 
 import os.path
 from app.models import Invoice
 import datetime
-import threading
 
 
 class AutomatedHandler(RequestHandler):
@@ -201,13 +199,13 @@ class AutomatedHandler(RequestHandler):
             invoice = None
             if transaction.value > 0:
                 now = datetime.datetime.now()
-                endYearEnd = endYear = now.year
-                endMonthEnd = endMonth = now.month
+                endYear = now.year
+                endMonth = now.month
                 if (now.month == 12):
-                    endMonthEnd = -1
-                    endYearEnd = now.year + 1
+                    endMonth = 0
+                    endYear = now.year + 1
                 dateInit = datetime.datetime(now.year, now.month, 1, 0, 0, 0);
-                dateEnd = datetime.datetime(endYearEnd, endMonthEnd + 1, 1, 0, 0, 0);
+                dateEnd = datetime.datetime(endYear, endMonth + 1, 1, 0, 0, 0);
                 invoices = list(
                     filter(lambda invoice: dateInit.date() <= invoice.debit_date < dateEnd.date(), account.invoices))
                 if len(invoices) == 0:

@@ -1,12 +1,12 @@
-from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
-from sqlalchemy_serializer import SerializerMixin
-from sqlalchemy.orm import relationship
+import os.path
 from datetime import datetime
-from sqlalchemy.ext.hybrid import hybrid_property
+
+from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy.orm import relationship
+from sqlalchemy_serializer import SerializerMixin
 
 from .database.database import Base
 
-import os.path
 
 class Config(Base, SerializerMixin):
     __tablename__ = 'configs'
@@ -111,7 +111,7 @@ class Account(Base, SerializerMixin):
     def update(self, other):
         if hasattr(other, 'is_credit_card'):
             self.is_credit_card = 1 if other.is_credit_card else 0
-        if hasattr(other, 'description') and len(other.description)>0:
+        if hasattr(other, 'description') and len(other.description) > 0:
             self.description = other.description
 
     @property
@@ -126,7 +126,6 @@ class Account(Base, SerializerMixin):
             if args[1] != '' and self.id == int(args[1]) and args[0] == 'banco_inter_cc':
                 return True
         return False
-
 
 
 class Category(Base, SerializerMixin):
@@ -276,12 +275,12 @@ class Transaction(Base, SerializerMixin):
         pass
 
     @property
-    def strdate(self):
-        pass
+    def str_date(self):
+        return self.date.strftime("%Y-%m-%d")
 
-    @strdate.setter
-    def strdate(self, strdate):
-        self.date = datetime.strptime(strdate.split('T')[0], '%Y-%m-%d')
+    @str_date.setter
+    def str_date(self, str_date):
+        self.date = datetime.strptime(str_date.split('T')[0], '%Y-%m-%d')
 
     @property
     def user_id(self):
