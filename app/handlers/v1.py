@@ -8,6 +8,7 @@ import json
 
 import bcrypt
 from ..decorators import handler_decorator
+from app.models import Transaction
 
 
 class BaseHandler(RequestHandler):
@@ -112,11 +113,12 @@ class UsersHandler(CrudHandler):
         return self.repository.save(user)
 
 
-from app.automated.automated import banco_do_brasil, banco_do_brasil_cc, caixa, banco_inter_cc
+from app.automated.automated import banco_do_brasil, banco_do_brasil_cc, caixa, banco_inter_cc, banco_do_brasil_cdb
 import os.path
 from app.models import Invoice
 import datetime
 import threading
+
 
 class AutomatedHandler(RequestHandler):
     transaction_repository = NotImplementedError
@@ -176,31 +178,71 @@ class AutomatedHandler(RequestHandler):
                 transaction.paid = True
                 print(self.transaction_repository.save_root(transaction))
 
+    def sync_banco_do_brasil_cdb(self, agency, account, password, account_id):
+        value = banco_do_brasil_cdb(agency, account, password)
+        if value is None:
+            return
+        ssum = sum(list(map(lambda t: t.value, self.accounts_repository.get_by_id_root(account_id).transactions)))
+        rest = value - ssum
+        if rest != 0:
+            t = Transaction()
+            t.account_id = account_id;
+            t.value = rest
+            t.description = 'Automated CDB update'
+            t.date = datetime.datetime.now()
+            t.paid = True
+            print(self.transaction_repository.save_root(t))
+
     def sync_banco_do_brasil_cc(self, agency, account, password, account_id):
         transactions = banco_do_brasil_cc(agency, account, password)
         account = self.accounts_repository.get_by_id_root(account_id)
-        now = datetime.datetime.now()
-        endYear = now.year
-        endMonth = now.month
-        if (now.month == 12):
-            endMonth = -1
-            endYear = now.year + 1
-        dateInit = datetime.datetime(now.year, now.month + 1, 1, 0, 0, 0);
-        dateEnd = datetime.datetime(endYear, endMonth + 2, 1, 0, 0, 0);
-        invoices = list(
-            filter(lambda invoice: dateInit.date() <= invoice.debit_date < dateEnd.date(), account.invoices))
-        if len(invoices) == 0:
-            invoice = Invoice()
-            invoice.debit_date = dateInit + (dateEnd - dateInit) / 2
-            invoice.description = 'Automated'
-            invoice.date_init = dateInit
-            invoice.date_end = dateEnd
-            invoice.account = account
-            print(self.invoice_repository.save_root(invoice))
-        else:
-            invoice = invoices[0]
-        transactions2 = invoice.transactions
+
         for transaction in transactions:
+            invoice = None
+            if transaction.value > 0:
+                now = datetime.datetime.now()
+                endYearEnd = endYear = now.year
+                endMonthEnd = endMonth = now.month
+                if (now.month == 12):
+                    endMonthEnd = -1
+                    endYearEnd = now.year + 1
+                dateInit = datetime.datetime(now.year, now.month, 1, 0, 0, 0);
+                dateEnd = datetime.datetime(endYearEnd, endMonthEnd + 1, 1, 0, 0, 0);
+                invoices = list(
+                    filter(lambda invoice: dateInit.date() <= invoice.debit_date < dateEnd.date(), account.invoices))
+                if len(invoices) == 0:
+                    invoice = Invoice()
+                    invoice.debit_date = dateInit + (dateEnd - dateInit) / 2
+                    invoice.description = 'Automated'
+                    invoice.date_init = dateInit
+                    invoice.date_end = dateEnd
+                    invoice.account = account
+                    print(self.invoice_repository.save_root(invoice))
+                else:
+                    invoice = invoices[0]
+            else:
+                now = datetime.datetime.now()
+                endYear = now.year
+                endMonth = now.month
+                if (now.month == 12):
+                    endMonth = -1
+                    endYear = now.year + 1
+                dateInit = datetime.datetime(now.year, now.month + 1, 1, 0, 0, 0);
+                dateEnd = datetime.datetime(endYear, endMonth + 2, 1, 0, 0, 0);
+                invoices = list(
+                    filter(lambda invoice: dateInit.date() <= invoice.debit_date < dateEnd.date(), account.invoices))
+                if len(invoices) == 0:
+                    invoice = Invoice()
+                    invoice.debit_date = dateInit + (dateEnd - dateInit) / 2
+                    invoice.description = 'Automated'
+                    invoice.date_init = dateInit
+                    invoice.date_end = dateEnd
+                    invoice.account = account
+                    print(self.invoice_repository.save_root(invoice))
+                else:
+                    invoice = invoices[0]
+
+            transactions2 = invoice.transactions
             contains = False
             for transaction2 in transactions2:
                 if transaction2.value == transaction.value and (transaction.date.date() - transaction2.date).days == 0:
@@ -270,7 +312,7 @@ class AutomatedHandler(RequestHandler):
             content = f.readlines()
         for line in content:
             args = line.split(',')
-            if args[1]!='' and account_id != int(args[1]):
+            if args[1] != '' and account_id != int(args[1]):
                 continue
             try:
                 if args[0] == 'caixa':
@@ -279,8 +321,9 @@ class AutomatedHandler(RequestHandler):
                     self.sync_banco_do_brasil(args[2], args[3], args[4], int(args[1]))
                 elif args[0] == 'banco_do_brasil_cc':
                     self.sync_banco_do_brasil_cc(args[2], args[3], args[4], int(args[1]))
+                elif args[0] == 'banco_do_brasil_cdb':
+                    self.sync_banco_do_brasil_cdb(args[2], args[3], args[4], int(args[1]))
                 elif args[0] == 'banco_inter_cc':
                     self.sync_banco_inter_cc(args[2], args[3], int(args[1]), extra)
             except Exception as e:
                 print('Error', e, args)
-

@@ -58,7 +58,46 @@ def banco_do_brasil(agencia, conta, senha):
     driver.quit()
     return transactions
 
-#
+
+def banco_do_brasil_cdb(agencia, conta, senha):
+    driver = webdriver.Chrome('./app/automated/chromedriver.exe')
+    try:
+        #driver.set_window_position(-10000,0)
+        driver.get("https://www2.bancobrasil.com.br/aapf/login.html?1624286762470#/acesso-aapf-agencia-conta-1")
+        WebDriverWait(driver, 5).until(
+            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#dependenciaOrigem")))
+        driver.find_element(By.ID, "dependenciaOrigem").send_keys(agencia)
+        WebDriverWait(driver, 5).until(
+            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#numeroContratoOrigem")))
+        driver.find_element(By.ID, "numeroContratoOrigem").send_keys(conta)
+        driver.find_element(By.ID, "botaoEnviar").click()
+        WebDriverWait(driver, 5).until(
+            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#senhaConta")))
+        driver.find_element(By.ID, "senhaConta").send_keys(senha)
+        try:
+            driver.find_element(By.ID, "botaoEnviar").click()
+        except:
+            pass
+        WebDriverWait(driver, 5).until(
+            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".menu-completo > .menu-itens")))
+        driver.execute_script("document.querySelector(\'[codigo=\"33130\"]\').click()")
+        WebDriverWait(driver, 5).until(
+            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#botaoContinua")))
+        driver.find_element(By.ID, "botaoContinua").click()
+        WebDriverWait(driver, 5).until(
+            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#botaoContinua2")))
+        driver.find_element(By.ID, "botaoContinua2").click()
+        WebDriverWait(driver, 5).until(
+            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".transacao-corpo  table:nth-child(6)")))
+        lines = driver.find_element(By.CSS_SELECTOR, ".transacao-corpo  table:nth-child(6)").find_elements_by_css_selector('tr')
+        for line in lines:
+            if "Saldo liquido projetado" in line.get_attribute('innerText').replace('\xa0', ' '):
+                l = list(map(lambda s: s.replace('\n', '').replace('\t', '').replace('.', '').replace(',', '.'), list(filter( lambda s: s != "", line.get_attribute('innerText').replace('\xa0', ' ').split(' ')))))
+                return float(l[len(l)-1])
+    except Exception as e:
+        print('Error banco_do_brasil', e)
+    driver.quit()
+    return None
 
 
 def banco_do_brasil_cc(agencia, conta, senha):
@@ -191,7 +230,7 @@ def banco_inter_cc(conta, senha, isafe):
         driver.find_element(By.NAME, "j_idt35").click()
         driver.find_element(By.ID, "j_idt159").click()
         driver.execute_script(
-            "pass=\""+senha+"\",i=0,b=!0,fn=(()=>{pass[i]?(j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err \"+pass[i]),document.querySelector(\'[title=\"▲\"]\')&&document.querySelector(\'[title=\"▲\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err2 \"+pass[i]),document.querySelector(\'[title=\"ABC\"]\')?document.querySelector(\'[title=\"ABC\"]\').click():document.querySelector(\'[title=\"!?.\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):console.log(\"err3 \"+pass[i]))),setTimeout(fn,300)):document.querySelector(\'[title=\"Confirmar\"]\').click()}),setTimeout(fn,300);")
+            "pass=\""+senha.replace('\n', '')+"\",i=0,b=!0,fn=(()=>{pass[i]?(j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err \"+pass[i]),document.querySelector(\'[title=\"▲\"]\')&&document.querySelector(\'[title=\"▲\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err2 \"+pass[i]),document.querySelector(\'[title=\"ABC\"]\')?document.querySelector(\'[title=\"ABC\"]\').click():document.querySelector(\'[title=\"!?.\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):console.log(\"err3 \"+pass[i]))),setTimeout(fn,300)):document.querySelector(\'[title=\"Confirmar\"]\').click()}),setTimeout(fn,300);")
         WebDriverWait(driver, 30000).until(
             expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".grid-35")))
         #isafe = input('isafe inter')

@@ -108,6 +108,11 @@ class Account(Base, SerializerMixin):
                 return True
         return False
 
+    def update(self, other):
+        if hasattr(other, 'is_credit_card'):
+            self.is_credit_card = 1 if other.is_credit_card else 0
+        if hasattr(other, 'description') and len(other.description)>0:
+            self.description = other.description
 
     @property
     def automated_body(self):
@@ -266,6 +271,18 @@ class Transaction(Base, SerializerMixin):
             return self.account.user
         return None
 
+    @user.setter
+    def user(self, user):
+        pass
+
+    @property
+    def strdate(self):
+        pass
+
+    @strdate.setter
+    def strdate(self, strdate):
+        self.date = datetime.strptime(strdate.split('T')[0], '%Y-%m-%d')
+
     @property
     def user_id(self):
         if self.user:
@@ -275,6 +292,14 @@ class Transaction(Base, SerializerMixin):
     def update(self, other):
         if hasattr(other, 'paid'):
             self.paid = 1 if other.paid else 0
+        if hasattr(other, 'description'):
+            self.description = other.description
+        if hasattr(other, 'date'):
+            self.date = other.date
+        if hasattr(other, 'invoice_id'):
+            self.invoice_id = other.invoice_id
+        if hasattr(other, 'value'):
+            self.value = other.value
 
 
 class CategoryTransaction(Base, SerializerMixin):

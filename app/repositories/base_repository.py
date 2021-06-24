@@ -59,6 +59,7 @@ class BaseRepository:
             return result
 
     def get_by_id(self, entity_id, user=None):
+        result = None
         with self.command_session_scope() as session:
             if user:
                 if hasattr(self.entity, 'user'):
@@ -82,26 +83,25 @@ class BaseRepository:
     def save(self, entity, user=None):
         with self.command_session_scope() as session:
             flushed = self.entity(**entity)
-            if user:
+            if hasattr(self.entity, 'user') and user:
                 flushed.user = user
             session.add(flushed)
-            session.flush()
-            return flushed
+            session.commit()
+            return self.get_by_id(flushed.id, user)
 
     def save_root(self, entity):
         with self.command_session_scope() as session:
             session.add(entity)
-            session.flush()
+            session.commit()
             return entity
 
     def put(self, entity_id, entity, user):
-        _entity = self.get_by_id(entity_id, user)
-        if not _entity:
-            raise EntityNotFound
-        _entity.update(self.entity(**entity))
         with self.command_session_scope() as session:
-            session.query(self.entity).filter(self.entity.id == _entity.id).update(entity)
-            session.flush()
+            _entity = session.query(self.entity).filter(self.entity.id == entity_id).one()
+            if not _entity:
+                raise EntityNotFound
+            _entity.update(self.entity(**entity))
+            session.commit()
         return True
 
     def delete(self, entity_id, user):
