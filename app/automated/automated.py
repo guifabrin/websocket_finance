@@ -126,6 +126,7 @@ def banco_do_brasil_cc(agencia, conta, senha):
     return transactions
 
 def caixa(usuario, senha):
+    transactions = []
     driver = webdriver.Chrome('./app/automated/chromedriver.exe')
     try:
         #driver.set_window_position(-10000,0)
@@ -144,6 +145,11 @@ def caixa(usuario, senha):
         driver.execute_script("document.querySelector(\'#password\').value=\'"+senha.replace('\n','')+"\'")
         driver.find_element(By.ID, "btnConfirmar").click()
         time.sleep(5)
+        try:
+            driver.execute_script("document.getElementById('modal-campanha').remove();");
+        except:
+            pass
+        time.sleep(5)
         driver.find_element(By.CSS_SELECTOR, "li:nth-child(1) .sup > .icone-menu").click()
         time.sleep(5)
         driver.find_element(By.LINK_TEXT, "Extrato").click()
@@ -151,7 +157,6 @@ def caixa(usuario, senha):
         time.sleep(5)
         lines = driver.find_element(By.CSS_SELECTOR, ".movimentacao").find_elements_by_css_selector('tr')
 
-        transactions = []
         for line in lines:
             columns = line.find_elements_by_css_selector('td')
             if len(columns) >= 4:
