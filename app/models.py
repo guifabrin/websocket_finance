@@ -234,16 +234,54 @@ class Invoice(Base, SerializerMixin):
     serialize_only = ('id', 'description', 'date_init', 'date_end', 'debit_date', 'transactions')
 
     @property
+    def str_debit_date(self):
+        return self.debit_date.strftime("%Y-%m-%d")
+
+    @str_debit_date.setter
+    def str_debit_date(self, str_debit_date):
+        self.debit_date = datetime.strptime(str_debit_date.split('T')[0], '%Y-%m-%d')
+
+    @property
+    def str_date_init(self):
+        return self.date_init.strftime("%Y-%m-%d")
+
+    @str_date_init.setter
+    def str_date_init(self, str_date_init):
+        self.date_init = datetime.strptime(str_date_init.split('T')[0], '%Y-%m-%d')
+
+    @property
+    def str_date_end(self):
+        return self.date_end.strftime("%Y-%m-%d")
+
+    @str_date_end.setter
+    def str_date_end(self, str_date_end):
+        self.date_end = datetime.strptime(str_date_end.split('T')[0], '%Y-%m-%d')
+
+    @property
     def user(self):
         if self.account:
             return self.account.user
         return None
+
+    @user.setter
+    def user(self, user):
+        pass
 
     @property
     def user_id(self):
         if self.user:
             return self.user.id
         return None
+
+    def update(self, other):
+        if hasattr(other, 'description'):
+            self.description = other.description
+        if hasattr(other, 'debit_date'):
+            self.debit_date = other.debit_date
+        if hasattr(other, 'date_init'):
+            self.date_init = other.date_init
+        if hasattr(other, 'date_end'):
+            self.date_end = other.date_end
 
 
 class Transaction(Base, SerializerMixin):
