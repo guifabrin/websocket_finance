@@ -10,8 +10,10 @@ API's próprias para pessoa física.
 Atualmente é possível sincronizar os lançamentos do mês corrente apenas das contas:
 - Banco do Brasil [conta corrente]
 - Banco do Brasil [cartões de crédito]
+- Banco do Brasil [Líquido projetado CDB]
 - Caixa Federal [conta corrente]
 - Banco Inter [cartões de crédito]
+- Banco Itaú [conta corrente]
 
 ## Configuração
 - Adicionar `chromedriver.exe` em app/automated/
@@ -21,7 +23,8 @@ caixa,account_id,usuario,senha
 banco_do_brasil,account_id,agencia,conta,senha
 banco_do_brasil_cc,account_id,agencia,conta,senha
 banco_do_brasil_cdb,account_id,agencia,conta,senha
-banco_inter_cc,agencia,conta,senha
+banco_inter_cc,account_id,agencia,conta,senha
+banco_itau,account_id,agencia,conta,senha
 ```
 - Instalar python 3.9.5
 - Executar `pip install -r requirements.txt`

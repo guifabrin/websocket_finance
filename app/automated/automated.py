@@ -247,3 +247,46 @@ def banco_inter_cc(conta, senha, isafe):
         print('Error', banco_inter_cc.__name__, str(error))
     driver.quit()
     return transactions
+
+
+def banco_itau(agencia, conta, senha):
+    transactions = []
+    driver = webdriver.Chrome('./app/automated/chromedriver.exe')
+    try:
+        driver.get("https://www.itau.com.br/")
+        driver.set_window_size(1936, 1066)
+        WebDriverWait(driver, 30000).until(expected_conditions.visibility_of_element_located((By.ID, "agencia")))
+        driver.find_element(By.ID, "agencia").send_keys(agencia)
+        driver.find_element(By.ID, "conta").send_keys(conta)
+        driver.execute_script(
+            "const btn = document.getElementById(\'btnLoginSubmit\');btn.disabled=false;btn.class = \"send active icon-itaufonts_seta_right\"")
+        driver.find_element(By.ID, "btnLoginSubmit").click()
+        WebDriverWait(driver, 30000).until(
+            expected_conditions.presence_of_element_located((By.CSS_SELECTOR, ".tecla:nth-child(1)")))
+        driver.execute_script(
+            "var senha = \""+senha+"\"; var i = 0; var fn = () => { if (!senha[i]) { document.querySelector('#acessar').click(); return; } [...document.querySelectorAll(\'.tecla\')].filter(t => t.innerText.indexOf(senha[i]) > -1)[0].click();i++;setTimeout(fn, 100) };setTimeout(fn, 100)")
+        time.sleep(5)
+        WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "VerExtrato")))
+        driver.find_element(By.ID, "VerExtrato").click()
+        WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "select-55")))
+        driver.execute_script("document.querySelector(\"#select-55\").value=90; document.querySelector(\"#select-55\").dispatchEvent(new Event(\"change\"))");
+        time.sleep(5)
+        lines = driver.find_element(By.CSS_SELECTOR, "#gridLancamentos-pessoa-fisica").find_elements_by_css_selector('tr')
+        for line in lines:
+            if line.get_attribute('innerText') is None:
+                continue
+            columns = line.find_elements_by_css_selector('td')
+            if len(columns) >= 4:
+                try:
+                    transaction = Transaction()
+                    transaction.value = _parse_brl_to_float(columns[2].get_attribute('innerText')) * -1
+                    transaction.description = _clean_description(columns[1].get_attribute('innerText'))
+                    transaction.date = _parse_dd_mm_yyyy(columns[0].get_attribute('innerText'))
+                    transaction.paid = True
+                    transactions.append(transaction)
+                except Exception as error_inline:
+                    print('Possible not an error - inline', banco_inter_cc.__name__, str(error_inline))
+    except Exception as error:
+        print('Error', banco_inter_cc.__name__, str(error))
+    driver.quit()
+    return transactions

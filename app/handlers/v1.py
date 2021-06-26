@@ -9,7 +9,7 @@ from app.exceptions.not_allowed import NotAllowed
 from app.models import Transaction
 from ..decorators import handler_decorator
 
-from app.automated.automated import banco_do_brasil, banco_do_brasil_cc, caixa, banco_inter_cc, banco_do_brasil_cdb
+from app.automated.automated import banco_do_brasil, banco_do_brasil_cc, caixa, banco_inter_cc, banco_do_brasil_cdb, banco_itau
 import os.path
 from app.models import Invoice
 import datetime
@@ -165,6 +165,8 @@ class AutomatedHandler(RequestHandler, ABC):
                     self.sync_banco_do_brasil_cdb(args[2], args[3], args[4], int(args[1]))
                 elif args[0] == 'banco_inter_cc':
                     self.sync_banco_inter_cc(args[2], args[3], int(args[1]), extra)
+                elif args[0] == 'banco_itau':
+                    self.sync_itau(args[2], args[3], args[4], int(args[1]))
             except Exception as e:
                 print('Error', e, args)
         self.set_status(204)
@@ -243,6 +245,21 @@ class AutomatedHandler(RequestHandler, ABC):
 
     def sync_caixa(self, username, password, account_id):
         transactions = caixa(username, password)
+        stored_transactions = self.accounts_repository.get_by_id_root(account_id).transactions
+        for transaction in transactions:
+            contains = False
+            for stored_transaction in stored_transactions:
+                if stored_transaction.value == transaction.value and (
+                        transaction.date.date() - stored_transaction.date).days == 0:
+                    contains = True
+                    break
+            if not contains:
+                transaction.account_id = account_id
+                transaction.paid = True
+                print(self.transaction_repository.save_root(transaction))
+
+    def sync_itau(self, agency, account, password, account_id):
+        transactions = banco_itau(agency, account, password)
         stored_transactions = self.accounts_repository.get_by_id_root(account_id).transactions
         for transaction in transactions:
             contains = False
