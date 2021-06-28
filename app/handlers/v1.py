@@ -109,14 +109,21 @@ class CrudHandler(BaseHandler, ABC):
 
 class UsersHandler(CrudHandler, ABC):
 
-    # def data_received(self, chunk):
-    #     pass
-
     @handler_decorator.handle()
     def post(self, key):
         user = json.loads(self.request.body)
         user['password'] = bcrypt.hashpw(user['password'].encode(), bcrypt.gensalt())
         return self.repository.save(user)
+
+    @handler_decorator.handle()
+    def get(self, key):
+        if not key:
+            return self.repository.get_all(self.auth_value())
+        else:
+            try:
+                return self.repository.get_by_id(int(key), self.auth_value())
+            except:
+                return self.repository.get_by('email', key, self.auth_value())
 
 
 class AutomatedHandler(RequestHandler, ABC):
