@@ -1,13 +1,17 @@
+import hashlib
+import json
+import threading
 import time
+import traceback
 from datetime import datetime
 
 from selenium import webdriver
-from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
 
-from app.models import Transaction
+from app.automated import banco_do_brasil, banco_inter, banco_caixa, banco_nu
+from app.models import Transaction, Account, Invoice
 
 now = datetime.now()
 
@@ -30,228 +34,9 @@ def _clean_description(str_description):
     return str_description.replace('\xa0', '').replace("\n", " ")
 
 
-def _banco_do_brasil_login(driver, agencia, conta, senha):
-    driver.get("https://www2.bancobrasil.com.br/aapf/login.html?1624286762470#/acesso-aapf-agencia-conta-1")
-    WebDriverWait(driver, 5).until(
-        expected_conditions.visibility_of_element_located((By.ID, "dependenciaOrigem")))
-    driver.find_element(By.ID, "dependenciaOrigem").send_keys(agencia)
-    WebDriverWait(driver, 5).until(
-        expected_conditions.visibility_of_element_located((By.ID, "numeroContratoOrigem")))
-    driver.find_element(By.ID, "numeroContratoOrigem").send_keys(conta)
-    driver.find_element(By.ID, "botaoEnviar").click()
-    WebDriverWait(driver, 5).until(
-        expected_conditions.visibility_of_element_located((By.ID, "senhaConta")))
-    driver.find_element(By.ID, "senhaConta").send_keys(senha)
-    try:
-        driver.find_element(By.ID, "botaoEnviar").click()
-    except Exception as err_button_sent:
-        print('Possible not an error - button sent', _banco_do_brasil_login.__name__, err_button_sent)
-    time.sleep(3)
-    WebDriverWait(driver, 5).until(
-        expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".menu-completo > .menu-itens")))
-
-
-def banco_do_brasil(agencia, conta, senha):
-    transactions = []
-    driver = webdriver.Chrome('./app/automated/chromedriver.exe')
-    try:
-        _banco_do_brasil_login(driver, agencia, conta, senha)
-        driver.execute_script("document.querySelector(\'[codigo=\"32456\"]\').click()")
-        WebDriverWait(driver, 5).until(
-            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#tabelaExtrato")))
-        lines = driver.find_element(By.ID, "tabelaExtrato").find_elements_by_css_selector('tr')
-        for line in lines:
-            columns = line.find_elements_by_css_selector('td')
-            if len(columns) >= 4:
-                try:
-                    value, credito_debito = columns[4].get_attribute('innerText').split(' ')
-                    multiplier = -1 if credito_debito == 'D' else 1
-                    transaction = Transaction()
-                    transaction.value = _parse_brl_to_float(value) * multiplier
-                    transaction.description = _clean_description(columns[2].get_attribute('innerText'))
-                    transaction.date = _parse_dd_mm_yyyy(columns[0].get_attribute('innerText'))
-                    if transaction.description not in ['Saldo Anterior']:
-                        transactions.append(transaction)
-                except Exception as error_inline:
-                    print('Possible not an error - inline', banco_do_brasil.__name__, str(error_inline))
-    except Exception as error:
-        print('Error', banco_do_brasil.__name__, str(error))
-    driver.quit()
-    return transactions
-
-
-def banco_do_brasil_cdb(agencia, conta, senha):
-    driver = webdriver.Chrome('./app/automated/chromedriver.exe')
-    try:
-        _banco_do_brasil_login(driver, agencia, conta, senha)
-        driver.execute_script("document.querySelector(\'[codigo=\"33130\"]\').click()")
-        WebDriverWait(driver, 5).until(
-            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#botaoContinua")))
-        driver.find_element(By.ID, "botaoContinua").click()
-        WebDriverWait(driver, 5).until(
-            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#botaoContinua2")))
-        driver.find_element(By.ID, "botaoContinua2").click()
-        WebDriverWait(driver, 5).until(
-            expected_conditions.visibility_of_element_located(
-                (By.CSS_SELECTOR, ".transacao-corpo  table:nth-child(6)")))
-        lines = driver.find_element(By.CSS_SELECTOR,
-                                    ".transacao-corpo  table:nth-child(6)").find_elements_by_css_selector('tr')
-        for line in lines:
-            if "Saldo liquido projetado" in line.get_attribute('innerText').replace('\xa0', ' '):
-                non_blank_items = list(
-                    filter(lambda s: s != "", line.get_attribute('innerText').replace('\xa0', ' ').split(' ')))
-                replaced_items = list(
-                    map(lambda s: s.replace('\n', '').replace('\t', '').replace('.', '').replace(',', '.'),
-                        non_blank_items))
-                return float(replaced_items[len(replaced_items) - 1])
-    except Exception as error:
-        print('Error', banco_do_brasil_cdb.__name__, str(error))
-    driver.quit()
-    return None
-
-
-def banco_do_brasil_cc(agencia, conta, senha):
-    transactions = []
-    driver = webdriver.Chrome('./app/automated/chromedriver.exe')
-    try:
-        _banco_do_brasil_login(driver, agencia, conta, senha)
-        driver.execute_script("document.querySelector(\'[codigo=\"32715\"]\').click()")
-        WebDriverWait(driver, 5).until(
-            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#carousel-cartoes img")))
-        cards = driver.find_elements(By.CSS_SELECTOR, "#carousel-cartoes img")
-        index = -1
-        for _ in cards:
-            try:
-                index = index + 1
-                driver.execute_script("buscaFaturas(" + str(index) + ");")
-                time.sleep(2)
-                WebDriverWait(driver, 5).until(
-                    expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".lancamentos")))
-                releases = driver.find_elements(By.CSS_SELECTOR, ".lancamentos")
-                for release in releases:
-                    lines = release.find_elements_by_css_selector('tr')
-                    for line in lines:
-                        if line.get_attribute('innerText') is None:
-                            continue
-                        columns = line.find_elements_by_css_selector('td')
-                        if len(columns) >= 4:
-                            try:
-                                transaction = Transaction()
-                                transaction.value = _parse_brl_to_float(columns[4].get_attribute('innerText')) * -1
-                                transaction.description = _clean_description(columns[1].get_attribute('innerText'))
-                                transaction.date = _parse_dd_mm(columns[0].get_attribute('innerText'))
-                                transaction.paid = True
-                                if transaction.description not in ['Saldo Anterior']:
-                                    transactions.append(transaction)
-                            except Exception as error_inline:
-                                print('Possible not an error - inline', banco_do_brasil_cc.__name__, str(error_inline))
-            except Exception as error_card:
-                print('Possible not an error - card', banco_do_brasil_cc.__name__, str(error_card))
-    except Exception as error:
-        print('Error', banco_do_brasil_cc.__name__, str(error))
-    driver.quit()
-    return transactions
-
-
-def caixa(usuario, senha):
-    transactions = []
-    driver = webdriver.Chrome('./app/automated/chromedriver.exe')
-    try:
-        driver.get("https://internetbanking.caixa.gov.br/sinbc/#!nb/login")
-        time.sleep(3)
-        WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "nomeUsuario")))
-        driver.find_element(By.ID, "nomeUsuario").send_keys(usuario)
-        driver.find_element(By.ID, "btnLogin").click()
-        time.sleep(3)
-        WebDriverWait(driver, 5).until(
-            expected_conditions.visibility_of_element_located((By.ID, "lnkInitials")))
-        driver.find_element(By.ID, "lnkInitials").click()
-        time.sleep(3)
-        WebDriverWait(driver, 5).until(
-            expected_conditions.visibility_of_element_located((By.ID, "password")))
-        driver.execute_script("document.querySelector(\'#password\').value=\'" + senha.replace('\n', '') + "\'")
-        driver.find_element(By.ID, "btnConfirmar").click()
-        time.sleep(5)
-        try:
-            driver.execute_script("document.getElementById('modal-campanha').remove();")
-        except Exception as error_modal:
-            print('Possible not an error - modal', caixa.__name__, str(error_modal))
-        time.sleep(5)
-        driver.find_element(By.CSS_SELECTOR, "li:nth-child(1) .sup > .icone-menu").click()
-        time.sleep(5)
-        driver.find_element(By.LINK_TEXT, "Extrato").click()
-        time.sleep(5)
-        lines = driver.find_element(By.CSS_SELECTOR, ".movimentacao").find_elements_by_css_selector('tr')
-        for line in lines:
-            columns = line.find_elements_by_css_selector('td')
-            if len(columns) >= 4:
-                try:
-                    str_value, credito_debito = columns[3].get_attribute('innerText').split(' ')
-                    multiplier = -1 if credito_debito == 'D' else 1
-                    transaction = Transaction()
-                    transaction.value = _parse_brl_to_float(str_value) * multiplier
-                    transaction.description = _clean_description(columns[2].get_attribute('innerText'))
-                    transaction.date = _parse_dd_mm_yyyy(columns[0].get_attribute('innerText'))
-                    if transaction.description not in ['Saldo Anterior']:
-                        transactions.append(transaction)
-                except Exception as error_inline:
-                    print('Possible not an error - inline', caixa.__name__, str(error_inline))
-    except Exception as error:
-        print('Error', caixa.__name__, str(error))
-    driver.quit()
-    return transactions
-
-
-def banco_inter_cc(conta, senha, isafe):
-    transactions = []
-    driver = webdriver.Chrome('./app/automated/chromedriver.exe')
-    try:
-        driver.get("https://internetbanking.bancointer.com.br/")
-        driver.set_window_size(1305, 883)
-        driver.find_element(By.ID, "loginv20170605").click()
-        driver.find_element(By.ID, "loginv20170605").send_keys(conta)
-        driver.find_element(By.NAME, "j_idt35").click()
-        driver.find_element(By.ID, "j_idt159").click()
-        driver.execute_script(
-            "pass=\"" + senha.replace('\n',
-                                      '') + "\",i=0,b=!0,fn=(()=>{pass[i]?(j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err \"+pass[i]),document.querySelector(\'[title=\"▲\"]\')&&document.querySelector(\'[title=\"▲\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):(console.log(\"err2 \"+pass[i]),document.querySelector(\'[title=\"ABC\"]\')?document.querySelector(\'[title=\"ABC\"]\').click():document.querySelector(\'[title=\"!?.\"]\').click(),j=document.querySelector(\'[title=\"\'+pass[i]+\'\"]\'),j?(console.log(pass[i]),j.click(),i++):console.log(\"err3 \"+pass[i]))),setTimeout(fn,300)):document.querySelector(\'[title=\"Confirmar\"]\').click()}),setTimeout(fn,300);")
-        WebDriverWait(driver, 5).until(
-            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, ".grid-35")))
-        driver.find_element(By.ID, "codigoAutorizacaoAOTP").send_keys(isafe)
-        driver.find_element(By.ID, "confirmarCodigoTransacaoAOTP").click()
-        WebDriverWait(driver, 5).until(
-            expected_conditions.visibility_of_element_located((By.CSS_SELECTOR, "#j_idt106\\3A 4\\3Aj_idt109 span")))
-        driver.find_element(By.CSS_SELECTOR, "#j_idt106\\3A 4\\3Aj_idt109 span").click()
-        element = driver.find_element(By.CSS_SELECTOR, "#j_idt106\\3A 4\\3Aj_idt109 span")
-        actions = ActionChains(driver)
-        actions.move_to_element(element).perform()
-        driver.find_element(By.CSS_SELECTOR, ".cf:nth-child(1) a").click()
-        driver.find_element(By.NAME, "j_idt146:0:j_idt298").click()
-        driver.find_element(By.NAME, "j_idt210").click()
-        lines = driver.find_element(By.CSS_SELECTOR, "[role=\"grid\"]").find_elements_by_css_selector('tr')
-        for line in lines:
-            if line.get_attribute('innerText') is None:
-                continue
-            columns = line.find_elements_by_css_selector('td')
-            if len(columns) >= 4:
-                try:
-                    transaction = Transaction()
-                    transaction.value = _parse_brl_to_float(columns[4].get_attribute('innerText')) * -1
-                    transaction.description = _clean_description(columns[1].get_attribute('innerText'))
-                    transaction.date = _parse_dd_mm_yyyy(columns[3].get_attribute('innerText'))
-                    transaction.paid = True
-                    transactions.append(transaction)
-                except Exception as error_inline:
-                    print('Possible not an error - inline', banco_inter_cc.__name__, str(error_inline))
-    except Exception as error:
-        print('Error', banco_inter_cc.__name__, str(error))
-    driver.quit()
-    return transactions
-
-
 def banco_itau(agencia, conta, senha):
     transactions = []
-    driver = webdriver.Chrome('./app/automated/chromedriver.exe')
+    driver = webdriver.Chrome('C:/chromedriver.exe')
     try:
         driver.get("https://www.itau.com.br/")
         driver.set_window_size(1936, 1066)
@@ -264,14 +49,16 @@ def banco_itau(agencia, conta, senha):
         WebDriverWait(driver, 30000).until(
             expected_conditions.presence_of_element_located((By.CSS_SELECTOR, ".tecla:nth-child(1)")))
         driver.execute_script(
-            "var senha = \""+senha+"\"; var i = 0; var fn = () => { if (!senha[i]) { document.querySelector('#acessar').click(); return; } [...document.querySelectorAll(\'.tecla\')].filter(t => t.innerText.indexOf(senha[i]) > -1)[0].click();i++;setTimeout(fn, 100) };setTimeout(fn, 100)")
+            "var senha = \"" + senha + "\"; var i = 0; var fn = () => { if (!senha[i]) { document.querySelector('#acessar').click(); return; } [...document.querySelectorAll(\'.tecla\')].filter(t => t.innerText.indexOf(senha[i]) > -1)[0].click();i++;setTimeout(fn, 100) };setTimeout(fn, 100)")
         time.sleep(5)
         WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "VerExtrato")))
         driver.find_element(By.ID, "VerExtrato").click()
         WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "select-55")))
-        driver.execute_script("document.querySelector(\"#select-55\").value=90; document.querySelector(\"#select-55\").dispatchEvent(new Event(\"change\"))");
+        driver.execute_script(
+            "document.querySelector(\"#select-55\").value=90; document.querySelector(\"#select-55\").dispatchEvent(new Event(\"change\"))");
         time.sleep(5)
-        lines = driver.find_element(By.CSS_SELECTOR, "#gridLancamentos-pessoa-fisica").find_elements_by_css_selector('tr')
+        lines = driver.find_element(By.CSS_SELECTOR, "#gridLancamentos-pessoa-fisica").find_elements_by_css_selector(
+            'tr')
         for line in lines:
             if line.get_attribute('innerText') is None:
                 continue
@@ -285,8 +72,181 @@ def banco_itau(agencia, conta, senha):
                     transaction.paid = True
                     transactions.append(transaction)
                 except Exception as error_inline:
-                    print('Possible not an error - inline', banco_inter_cc.__name__, str(error_inline))
+                    print('Possible not an error - inline', banco_itau.__name__, str(error_inline))
     except Exception as error:
-        print('Error', banco_inter_cc.__name__, str(error))
+        print('Error', banco_itau.__name__, str(error))
     driver.quit()
     return transactions
+
+
+class Automated:
+    transaction_repository = NotImplementedError
+    user_repository = NotImplementedError
+    invoice_repository = NotImplementedError
+    accounts_repository = NotImplementedError
+
+    def __init__(self, transaction_repository, user_repository, invoice_repository, accounts_repository):
+        self.transaction_repository = transaction_repository
+        self.user_repository = user_repository
+        self.invoice_repository = invoice_repository
+        self.accounts_repository = accounts_repository
+
+    def run(self, account, body=""):
+        args = account.automated_args.split(',')
+        method = getattr(self, args.pop(0))
+        try:
+            method(args, account, body)
+        except:
+            print(traceback.print_exc())
+
+    def parse(self, result, saccount, driver=None):
+        print('Resolved', saccount.description, driver)
+        transactions = result['transactions']
+        cards = result['cards']
+        automated_ids = list(map(lambda item: item.automated_id, saccount.transactions))
+        for transaction in transactions:
+            try:
+                sautomated_id = transaction.get('automated_id', None)
+                automated_id = hashlib.md5(json.dumps(transaction, sort_keys=True).encode(
+                    "utf-8")).hexdigest() if sautomated_id is None else sautomated_id
+                if automated_id in automated_ids:
+                    continue
+                stransaction = Transaction()
+                stransaction.account_id = saccount.id
+                stransaction.automated_id = automated_id
+                if transaction['date'] is None:
+                    continue
+                stransaction.date = datetime.datetime.strptime(transaction['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                stransaction.description = transaction['description']
+                stransaction.value = transaction['value']
+                stransaction.paid = True
+                print(self.transaction_repository.save(stransaction))
+            except Exception:
+                print(traceback.print_exc())
+        for card in cards:
+            for invoice in card:
+                user = self.user_repository.get_by_id(saccount.user.id)
+                saccount_invoices = list(
+                    filter(lambda account: account.description == invoice['cardNumber'], user.accounts))
+                if len(saccount_invoices) == 0:
+                    saccount_invoice = Account()
+                    saccount_invoice.user_id = saccount.user.id
+                    saccount_invoice.is_credit_card = True
+                    saccount_invoice.prefer_debit_account_id = saccount.id
+                    saccount_invoice.description = invoice['cardNumber']
+                    print(self.accounts_repository.save(saccount_invoice))
+                else:
+                    saccount_invoice = saccount_invoices[0]
+
+                automated_ids = list(map(lambda item: item.automated_id, saccount_invoice._transactions))
+                stransactions = []
+                for data in invoice['values']:
+                    if data['date'] is None:
+                        continue
+                    sautomated_id = data.get('automated_id', None)
+                    automated_id = hashlib.md5(json.dumps(data, sort_keys=True).encode(
+                        "utf-8")).hexdigest() if sautomated_id is None else sautomated_id
+                    if automated_id in automated_ids:
+                        continue
+                    automated_ids.append(automated_id)
+                    stransaction = Transaction()
+                    stransaction.account_id = saccount_invoice.id
+                    stransaction.automated_id = automated_id
+                    stransaction.date = datetime.datetime.strptime(data['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                    stransaction.description = data['description']
+                    stransaction.value = data['value']
+                    stransaction.paid = True
+                    stransactions.append(stransaction)
+                if len(stransactions) == 0:
+                    continue
+                dates = list(map(lambda transaction: transaction.date, stransactions))
+                min_date = min(dates)
+                max_date = max(dates)
+                middle_date = datetime.datetime.strptime(invoice['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                sinvoices = list(filter(lambda sinvoice: (sinvoice.debit_date - middle_date.date()).days == 0,
+                                        saccount_invoice.invoices))
+                if len(sinvoices) == 0:
+                    sinvoice = Invoice()
+                    sinvoice.debit_date = middle_date
+                    sinvoice.date_init = min_date
+                    sinvoice.date_end = max_date
+                    sinvoice.account_id = saccount_invoice.id
+                    sinvoice.description = 'Automated'
+                    print(self.invoice_repository.save(sinvoice))
+                else:
+                    sinvoice = sinvoices[0]
+                for stransaction in stransactions:
+                    stransaction.invoice_id = sinvoice.id
+                    print(self.transaction_repository.save(stransaction))
+
+        if result.get('cdb', None) is None:
+            if driver is not None:
+                driver.close()
+            return
+        saccounts_cdb = list(
+            filter(lambda
+                       account: account.description == 'CDB Automated' and saccount.id == account.prefer_debit_account_id,
+                   user.accounts))
+        if len(saccounts_cdb) == 0:
+            saccount_cdb = Account()
+            saccount_cdb.user_id = saccount.user.id
+            saccount_cdb.prefer_debit_account_id = saccount.id
+            saccount_cdb.description = 'CDB Automated'
+            print(self.accounts_repository.save(saccount_cdb))
+        else:
+            saccount_cdb = saccounts_cdb[0]
+        transactions = saccount_cdb.transactions
+        applied = sum(list(map(lambda l_transaction: l_transaction.value, transactions)))
+        rest = result['cdb'] - applied
+        if rest != 0:
+            transaction = Transaction()
+            transaction.account_id = saccount_cdb.id
+            transaction.value = rest
+            transaction.description = 'Automated CDB update'
+            transaction.date = datetime.now()
+            transaction.paid = True
+            print(self.transaction_repository.save(transaction))
+        if driver is not None:
+            driver.close()
+
+    def sync_banco_do_brasil(self, args, saccount, _):
+        agency, account, password = args
+        driver = webdriver.Chrome('C:/chromedriver.exe')
+        result = banco_do_brasil.get(driver, agency, account, password)
+        self.parse(result, saccount, driver)
+
+    def sync_banco_inter(self, args, saccount, isafe):
+        account, password = args
+        driver = webdriver.Chrome('C:/chromedriver.exe')
+        result = banco_inter.get(driver, account, password, isafe)
+        self.parse(result, saccount, driver)
+
+    def sync_banco_caixa(self, args, saccount, _):
+        username, password = args
+        driver = webdriver.Chrome('C:/chromedriver.exe')
+        result = banco_caixa.get(driver, username, password)
+        self.parse(result, saccount, driver)
+
+    def sync_banco_nuconta(self, args, saccount, _):
+        cpf, password = args
+        result = banco_nu.get(cpf, password)
+        self.parse(result, saccount)
+
+    def sync_banco_itau(self, args, saccount, _):
+        agency, account, password = args
+        transactions = banco_itau(agency, account, password)
+        stored_transactions = saccount.transactions
+        for transaction in transactions:
+            contains = False
+            for stored_transaction in stored_transactions:
+                if stored_transaction.value == transaction.value and (
+                        transaction.date.date() - stored_transaction.date).days == 0:
+                    if not stored_transaction.paid:
+                        stored_transaction.paid = True
+                        print(self.transaction_repository.save(stored_transaction))
+                    contains = True
+                    break
+            if not contains:
+                transaction.account_id = saccount.id
+                transaction.paid = True
+                print(self.transaction_repository.save(transaction))

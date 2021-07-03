@@ -1,4 +1,3 @@
-import os.path
 from datetime import datetime
 
 from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, text
@@ -67,6 +66,7 @@ class User(Base, SerializerMixin):
     updated_at = Column(DateTime)
 
     roles = relationship("RoleUser", back_populates="user", lazy='subquery')
+    accounts = relationship("Account", back_populates="user", lazy='subquery')
 
     serialize_only = ('id', 'name', 'email', 'picture', 'created_at')
 
@@ -77,16 +77,21 @@ class Account(Base, SerializerMixin):
     id = Column(Integer, primary_key=True)
     description = Column(String, nullable=False)
     is_credit_card = Column(Integer, server_default=text("'0'"))
+    ignore = Column(Integer, server_default=text("'0'"))
     user_id = Column(ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime)
+    automated_args = Column(String, nullable=False)
+    automated_body = Column(Integer, server_default=text("'0'"))
+    prefer_debit_account_id = Column(ForeignKey('accounts.id'), nullable=True)
 
     user = relationship('User', lazy='subquery')
 
     _transactions = relationship("Transaction", back_populates="account", lazy='subquery')
     invoices = relationship("Invoice", back_populates="account", lazy='subquery')
 
-    serialize_only = ('id', 'description', 'is_credit_card', 'transactions', 'invoices', 'automated', 'automated_body')
+    serialize_only = (
+        'id', 'description', 'is_credit_card', 'transactions', 'invoices', 'automated', 'automated_body', 'ignore')
 
     @property
     def transactions(self):
@@ -95,37 +100,11 @@ class Account(Base, SerializerMixin):
         else:
             return self._transactions
 
-    @property
-    def automated(self):
-        filename = ".automated"
-        if not os.path.isfile(filename):
-            return False
-        with open(filename) as f:
-            content = f.readlines()
-        for line in content:
-            args = line.split(',')
-            if args[1] != '' and self.id == int(args[1]):
-                return True
-        return False
-
     def update(self, other):
         if hasattr(other, 'is_credit_card'):
             self.is_credit_card = 1 if other.is_credit_card else 0
         if hasattr(other, 'description') and len(other.description) > 0:
             self.description = other.description
-
-    @property
-    def automated_body(self):
-        filename = ".automated"
-        if not os.path.isfile(filename):
-            return False
-        with open(filename) as f:
-            content = f.readlines()
-        for line in content:
-            args = line.split(',')
-            if args[1] != '' and self.id == int(args[1]) and args[0] == 'banco_inter_cc':
-                return True
-        return False
 
 
 class Category(Base, SerializerMixin):
@@ -219,6 +198,7 @@ class Invoice(Base, SerializerMixin):
 
     id = Column(Integer, primary_key=True)
     description = Column(String, nullable=False)
+    automated_id = Column(String, nullable=True)
     date_init = Column(Date, nullable=False)
     date_end = Column(Date, nullable=False)
     debit_date = Column(Date, nullable=False)
@@ -231,7 +211,7 @@ class Invoice(Base, SerializerMixin):
 
     transactions = relationship("Transaction", back_populates="invoice", lazy='subquery')
 
-    serialize_only = ('id', 'description', 'date_init', 'date_end', 'debit_date', 'transactions')
+    serialize_only = ('id', 'description', 'date_init', 'date_end', 'debit_date', 'transactions', 'automated_id')
 
     @property
     def str_debit_date(self):
@@ -283,12 +263,17 @@ class Invoice(Base, SerializerMixin):
         if hasattr(other, 'date_end'):
             self.date_end = other.date_end
 
+    @property
+    def value(self):
+        return sum(map(lambda t: t.value, self.transactions))
+
 
 class Transaction(Base, SerializerMixin):
     __tablename__ = 'transactions'
 
     id = Column(Integer, primary_key=True)
     description = Column(String, nullable=False)
+    automated_id = Column(String, nullable=True)
     date = Column(Date, nullable=False)
     value = Column(Float, nullable=False)
     paid = Column(Integer, nullable=False)
@@ -297,10 +282,13 @@ class Transaction(Base, SerializerMixin):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime)
 
-    serialize_only = ('id', 'description', 'date', 'paid', 'value')
+    serialize_only = ('id', 'description', 'date', 'paid', 'value', 'automated_id')
 
     account = relationship('Account', lazy='subquery')
     invoice = relationship('Invoice', lazy='subquery')
+
+    def __init__(self):
+        self.already_inserted = False
 
     @property
     def user(self):
