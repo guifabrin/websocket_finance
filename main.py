@@ -10,13 +10,14 @@ from psutil import process_iter
 from app.automated.automated import Automated
 from app.database.database import create
 from app.handlers.v1 import AutomatedHandler
-from app.models import Transaction, Account, Invoice, User
+from app.models import Transaction, Account, Invoice, User, Notification, Captha
 from app.repositories.base_repository import BaseRepository
-
-main_user_repository = BaseRepository(entity=User)
-main_transactions_repository = BaseRepository(entity=Transaction)
-main_accounts_repository = BaseRepository(entity=Account)
-main_invoice_repository = BaseRepository(entity=Invoice)
+main_notification_repository = BaseRepository(entity=Notification)
+main_user_repository = BaseRepository(entity=User, notification_repository = main_notification_repository)
+main_transactions_repository = BaseRepository(entity=Transaction, notification_repository = main_notification_repository)
+main_accounts_repository = BaseRepository(entity=Account, notification_repository = main_notification_repository)
+main_invoice_repository = BaseRepository(entity=Invoice, notification_repository = main_notification_repository)
+main_captcha_repository = BaseRepository(entity=Captha)
 
 
 def make_app():
@@ -26,7 +27,7 @@ def make_app():
     return tornado.web.Application([
         (r"/api/v1/automated/?(.*)?", AutomatedHandler,
          dict(transaction_repository=main_transactions_repository, user_repository=main_user_repository,
-              invoice_repository=main_invoice_repository, accounts_repository=main_accounts_repository)),
+              invoice_repository=main_invoice_repository, accounts_repository=main_accounts_repository, captcha_repository=main_captcha_repository)),
     ], **settings)
 
 
@@ -39,7 +40,7 @@ def auto_sync():
         for account in accounts:
             if account.automated_args and not account.automated_body:
                 Automated(main_transactions_repository, main_user_repository, main_invoice_repository,
-                          main_accounts_repository).run(account)
+                          main_accounts_repository, main_captcha_repository).run(account)
                 time.sleep(60 * 5)
         time.sleep(60 * 60)
 

@@ -341,3 +341,20 @@ class CategoryTransaction(Base, SerializerMixin):
 
     category = relationship('Category', lazy='subquery')
     transaction = relationship('Transaction', lazy='subquery')
+
+class Notification(Base, SerializerMixin):
+    __tablename__ = 'notifications'
+
+    id = Column(Integer, primary_key=True)
+    table = Column(String, nullable=False)
+    entity_id = Column(Integer, nullable=False)
+    method = Column(String, nullable=False)
+    date = Column(Date, nullable=False)
+    seen = Column(Integer, nullable=True, server_default=text("'0'"))
+
+class Captha(Base, SerializerMixin):
+    __tablename__ = 'captcha'
+
+    id = Column(Integer, primary_key=True)
+    base64_url = Column(String, nullable=False)
+    result = Column(Integer, nullable=False)

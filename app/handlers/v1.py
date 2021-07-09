@@ -16,6 +16,7 @@ class AutomatedHandler(RequestHandler, ABC):
     user_repository = NotImplementedError
     invoice_repository = NotImplementedError
     accounts_repository = NotImplementedError
+    captcha_repository = NotImplementedError
 
     def auth_value(self):
         email, password = basicauth.decode(self.request.headers['Authorization'])
@@ -30,11 +31,12 @@ class AutomatedHandler(RequestHandler, ABC):
         self.set_header('Access-Control-Allow-Methods', 'GET, PUT, DELETE, OPTIONS')
         self.set_header("Access-Control-Allow-Headers", "access-control-allow-origin,authorization,content-type")
 
-    def initialize(self, transaction_repository, user_repository, invoice_repository, accounts_repository):
+    def initialize(self, transaction_repository, user_repository, invoice_repository, accounts_repository, captcha_repository):
         self.transaction_repository = transaction_repository
         self.user_repository = user_repository
         self.invoice_repository = invoice_repository
         self.accounts_repository = accounts_repository
+        self.captcha_repository = captcha_repository
 
     def options(self, _):
         self.set_status(204)
@@ -48,6 +50,6 @@ class AutomatedHandler(RequestHandler, ABC):
         if account is None or account.user.id is not user.id:
             return self.set_status(401)
         Automated(self.transaction_repository, self.user_repository, self.invoice_repository,
-                  self.accounts_repository).run(account, self.request.body)
+                  self.accounts_repository, self.captcha_repository).run(account, self.request.body)
         self.set_status(200)
         self.finish()

@@ -155,6 +155,30 @@ window.pybancointer = {
                                     cardNumber,
                                     date: new Date(`${ddyyyy}-${ddmm}-${dddd}`)
                                 }])
+                            } else if (response.startsWith('<!DOCTYPE html>')) {
+                                const [dddd, ddmm, ddyyyy] = $(response).find('table tr').toArray().filter(tr=>tr.innerText.indexOf('Vencimento')>-1)[0].children[1].innerText.trim().split('/')
+                                const linhas = $(response).find('table tr.ui-widget-content').toArray().map(tr => [...tr.children].map(td=>td.innerText).join(';'))
+                                const cardNumber = $(response).find('.numeroCartao').text().trim()
+                                var values = []
+                                debugger
+                                for (var i = 0; i < linhas.length; i++) {
+                                    var [_, desc1, desc2, data, valor] = linhas[i].split(';')
+                                    var [dd, mm, yyyy] = data.split('/')
+                                    if (!valor) {
+                                        continue;
+                                    }
+                                    var value = valor.replace('.', '').replace(',', '.').replace('R$', '')
+                                    values.push({
+                                        date: new Date(`${yyyy}-${mm}-${dd}`),
+                                        description: desc1 + ' ' + desc2,
+                                        value: parseFloat(value) * -1
+                                    })
+                                }
+                                window.pybancointer.faturas.cartoes.push([{
+                                    values,
+                                    cardNumber,
+                                    date: new Date(`${ddyyyy}-${ddmm}-${dddd}`)
+                                }])
                             }
                             setTimeout(() => {
                                 fn(index + 1)

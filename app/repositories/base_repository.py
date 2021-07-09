@@ -1,13 +1,18 @@
+import datetime
+import json
 from contextlib import contextmanager
 
+from ..models import Notification
 from ..database.database import Session
 
 
 class BaseRepository:
     entity = NotImplementedError
+    notification_repository = NotImplementedError
 
-    def __init__(self, entity):
+    def __init__(self, entity, notification_repository = None):
         self.entity = entity
+        self.notification_repository = notification_repository
 
     @contextmanager
     def command_session_scope(self):
@@ -54,4 +59,13 @@ class BaseRepository:
     def save(self, entity):
         with self.command_session_scope() as session:
             session.add(entity)
+            session.flush()
+        if self.notification_repository is not None:
+            notification = Notification()
+            notification.date = datetime.datetime.now()
+            notification.table = type(entity).__name__
+            notification.entity_id = entity.id
+            notification.method = 'save'
+            notification.seen = False
+            self.notification_repository.save(notification)
         return entity

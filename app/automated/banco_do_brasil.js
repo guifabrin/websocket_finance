@@ -58,6 +58,7 @@ window.pybancodobrasil = {
                         }
                     }
                 }
+                console.log(data)
                 return window.pybancodobrasil.extratos.methods.parse(data.filter(item => item));
             },
             parse(array) {
@@ -147,13 +148,14 @@ window.pybancodobrasil = {
                     data.push(rowData);
                 }
                 for (let index in data) {
-                    if (data[index].length != 4) {
+                    if (data[index].length < 4) {
                         delete data[index];
                     } else {
-                        if (!data[index][3] || data[index][0] == " " || data[index][3] == " ") {
+                        if (!data[index][3] || data[index][0] == "R$ ") {
                             delete data[index]
                         }
                     }
+                    console.log(data[index])
                 }
                 return window.pybancodobrasil.faturas.methods.parseValues(data);
             },
@@ -163,18 +165,23 @@ window.pybancodobrasil = {
                     try {
                         const [dd, mm] = data[0].split('/');
                         const description = data[1]
-                        const value = parseFloat(data[3].replace('.', '').replace(',', '.')) * -1;
-                        if (!value) {
+                        const tvalue = data.length == 5 ? data[4]: data[3]
+                        const value = parseFloat(tvalue.replace('.', '').replace(',', '.')) * -1;
+                        const date = new Date(`2021-${(parseInt(mm) + '').padStart(2, '0')}-${dd}`)
+                        if (!value || isNaN(date.getTime())) {
                             continue;
                         }
                         values.push({
-                            date: new Date(`2021-${(parseInt(mm) + '').padStart(2, '0')}-${dd}`),
+                            date,
                             description,
                             value,
                         })
                     } catch (e) { }
                 }
                 return values;
+            },
+            last: {
+
             },
             parse: (data) => {
                 const $el = $(data).find('.textoIdCartao')[1]
@@ -189,11 +196,35 @@ window.pybancodobrasil = {
                     if (nvalues && nvalues.length)
                         values = [...values, ...nvalues];
                 }
-                const [dd, mm, yyyy] = $(data).find('.dadosAtencaoDestaque')[0].innerText.split('/')
+                let dd = 01;
+                let mm = 01;
+                let yyyy = 2021;
+                $elVencimento = $(data).find('.vencimentoFatura')[0]
+                if ($elVencimento){
+                    $($elVencimento).children('span').remove();
+                    const [ddd, mmd, yyyyd] = $elVencimento.innerText.trim().split('/');
+                    dd = ddd;
+                    mm =  mmd;
+                    yyyy = yyyyd;
+                    window.pybancodobrasil.faturas.methods.last.dd = dd;
+                    window.pybancodobrasil.faturas.methods.last.mm = mm;
+                    window.pybancodobrasil.faturas.methods.last.yyyy = yyyy;
+                } else {
+                    if (window.pybancodobrasil.faturas.methods.last.dd) {
+                        dd = window.pybancodobrasil.faturas.methods.last.dd;
+                        mm = parseInt(window.pybancodobrasil.faturas.methods.last.mm)+1;
+                        yyyy = window.pybancodobrasil.faturas.methods.last.yyyy;
+                        if (mm == 13){
+                            mm = 1;
+                            yyyy++;
+                        }
+                    }
+                }
+                console.log(`${yyyy}-${(mm+'').padStart(2, '0')}-${dd}`)
                 return {
                     values,
                     cardNumber,
-                    date: new Date(`${yyyy}-${mm}-10`)
+                    date: new Date(`${yyyy}-${(mm+'').padStart(2, '0')}-${dd}`)
                 }
             }
         }

@@ -10,7 +10,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
 
-from app.automated import banco_do_brasil, banco_inter, banco_caixa, banco_nu
+from app.automated import banco_do_brasil, banco_inter, banco_caixa, banco_nu, sodexo_alimentacao
 from app.models import Transaction, Account, Invoice
 
 now = datetime.now()
@@ -66,7 +66,7 @@ def banco_itau(agencia, conta, senha):
             if len(columns) >= 4:
                 try:
                     transaction = Transaction()
-                    transaction.value = _parse_brl_to_float(columns[2].get_attribute('innerText')) * -1
+                    transaction.value = _parse_brl_to_float(columns[2].get_attribute('innerText'))
                     transaction.description = _clean_description(columns[1].get_attribute('innerText'))
                     transaction.date = _parse_dd_mm_yyyy(columns[0].get_attribute('innerText'))
                     transaction.paid = True
@@ -84,12 +84,14 @@ class Automated:
     user_repository = NotImplementedError
     invoice_repository = NotImplementedError
     accounts_repository = NotImplementedError
+    captcha_repository = NotImplementedError
 
-    def __init__(self, transaction_repository, user_repository, invoice_repository, accounts_repository):
+    def __init__(self, transaction_repository, user_repository, invoice_repository, accounts_repository, captcha_repository):
         self.transaction_repository = transaction_repository
         self.user_repository = user_repository
         self.invoice_repository = invoice_repository
         self.accounts_repository = accounts_repository
+        self.captcha_repository = captcha_repository
 
     def run(self, account, body=""):
         args = account.automated_args.split(',')
@@ -100,6 +102,7 @@ class Automated:
             print(traceback.print_exc())
 
     def parse(self, result, saccount, driver=None):
+        user = self.user_repository.get_by_id(saccount.user.id)
         print('Resolved', saccount.description, driver)
         transactions = result['transactions']
         cards = result['cards']
@@ -116,7 +119,7 @@ class Automated:
                 stransaction.automated_id = automated_id
                 if transaction['date'] is None:
                     continue
-                stransaction.date = datetime.datetime.strptime(transaction['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                stransaction.date = datetime.strptime(transaction['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
                 stransaction.description = transaction['description']
                 stransaction.value = transaction['value']
                 stransaction.paid = True
@@ -125,7 +128,6 @@ class Automated:
                 print(traceback.print_exc())
         for card in cards:
             for invoice in card:
-                user = self.user_repository.get_by_id(saccount.user.id)
                 saccount_invoices = list(
                     filter(lambda account: account.description == invoice['cardNumber'], user.accounts))
                 if len(saccount_invoices) == 0:
@@ -152,7 +154,7 @@ class Automated:
                     stransaction = Transaction()
                     stransaction.account_id = saccount_invoice.id
                     stransaction.automated_id = automated_id
-                    stransaction.date = datetime.datetime.strptime(data['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                    stransaction.date = datetime.strptime(data['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
                     stransaction.description = data['description']
                     stransaction.value = data['value']
                     stransaction.paid = True
@@ -162,7 +164,7 @@ class Automated:
                 dates = list(map(lambda transaction: transaction.date, stransactions))
                 min_date = min(dates)
                 max_date = max(dates)
-                middle_date = datetime.datetime.strptime(invoice['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
+                middle_date = datetime.strptime(invoice['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
                 sinvoices = list(filter(lambda sinvoice: (sinvoice.debit_date - middle_date.date()).days == 0,
                                         saccount_invoice.invoices))
                 if len(sinvoices) == 0:
@@ -230,6 +232,12 @@ class Automated:
     def sync_banco_nuconta(self, args, saccount, _):
         cpf, password = args
         result = banco_nu.get(cpf, password)
+        self.parse(result, saccount)
+
+    def sync_sodexo_alimentacao(self, args, saccount, _):
+        cartao, cpf = args
+        driver = webdriver.Chrome('C:/chromedriver.exe')
+        result = sodexo_alimentacao.get(driver, cartao, cpf, self.captcha_repository)
         self.parse(result, saccount)
 
     def sync_banco_itau(self, args, saccount, _):

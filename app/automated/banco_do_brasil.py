@@ -36,8 +36,10 @@ def __login(driver, agencia, conta, senha):
 
 def __extratos(driver, fromyear=1993):
     try:
+        time.sleep(1)
         driver.execute_script(minified)
         driver.execute_script("window.pybancodobrasil.extratos.methods.goto()")
+        time.sleep(1)
         for year in range(fromyear, now.year + 1):
             for month in range(1, 13):
                 if year == now.year and month > now.month:
@@ -59,7 +61,7 @@ def __faturas(driver):
     try:
         driver.execute_script(minified)
         driver.execute_script("window.pybancodobrasil.faturas.methods.goto()")
-        time.sleep(0.3)
+        time.sleep(1)
         driver.execute_script("window.pybancodobrasil.faturas.methods.buscaFaturas(0)")
         done = False
         while not done:
