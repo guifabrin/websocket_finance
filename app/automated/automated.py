@@ -6,11 +6,12 @@ import traceback
 from datetime import datetime
 
 from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
 
-from app.automated import banco_do_brasil, banco_inter, banco_caixa, banco_nu, sodexo_alimentacao
+from app.automated import banco_do_brasil, banco_inter, banco_caixa, banco_nu, sodexo_alimentacao, picpay
 from app.models import Transaction, Account, Invoice
 
 now = datetime.now()
@@ -34,51 +35,6 @@ def _clean_description(str_description):
     return str_description.replace('\xa0', '').replace("\n", " ")
 
 
-def banco_itau(agencia, conta, senha):
-    transactions = []
-    driver = webdriver.Chrome('C:/chromedriver.exe')
-    try:
-        driver.get("https://www.itau.com.br/")
-        driver.set_window_size(1936, 1066)
-        WebDriverWait(driver, 30000).until(expected_conditions.visibility_of_element_located((By.ID, "agencia")))
-        driver.find_element(By.ID, "agencia").send_keys(agencia)
-        driver.find_element(By.ID, "conta").send_keys(conta)
-        driver.execute_script(
-            "const btn = document.getElementById(\'btnLoginSubmit\');btn.disabled=false;btn.class = \"send active icon-itaufonts_seta_right\"")
-        driver.find_element(By.ID, "btnLoginSubmit").click()
-        WebDriverWait(driver, 30000).until(
-            expected_conditions.presence_of_element_located((By.CSS_SELECTOR, ".tecla:nth-child(1)")))
-        driver.execute_script(
-            "var senha = \"" + senha + "\"; var i = 0; var fn = () => { if (!senha[i]) { document.querySelector('#acessar').click(); return; } [...document.querySelectorAll(\'.tecla\')].filter(t => t.innerText.indexOf(senha[i]) > -1)[0].click();i++;setTimeout(fn, 100) };setTimeout(fn, 100)")
-        time.sleep(5)
-        WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "VerExtrato")))
-        driver.find_element(By.ID, "VerExtrato").click()
-        WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "select-55")))
-        driver.execute_script(
-            "document.querySelector(\"#select-55\").value=90; document.querySelector(\"#select-55\").dispatchEvent(new Event(\"change\"))");
-        time.sleep(5)
-        lines = driver.find_element(By.CSS_SELECTOR, "#gridLancamentos-pessoa-fisica").find_elements_by_css_selector(
-            'tr')
-        for line in lines:
-            if line.get_attribute('innerText') is None:
-                continue
-            columns = line.find_elements_by_css_selector('td')
-            if len(columns) >= 4:
-                try:
-                    transaction = Transaction()
-                    transaction.value = _parse_brl_to_float(columns[2].get_attribute('innerText'))
-                    transaction.description = _clean_description(columns[1].get_attribute('innerText'))
-                    transaction.date = _parse_dd_mm_yyyy(columns[0].get_attribute('innerText'))
-                    transaction.paid = True
-                    transactions.append(transaction)
-                except Exception as error_inline:
-                    print('Possible not an error - inline', banco_itau.__name__, str(error_inline))
-    except Exception as error:
-        print('Error', banco_itau.__name__, str(error))
-    driver.quit()
-    return transactions
-
-
 class Automated:
     transaction_repository = NotImplementedError
     user_repository = NotImplementedError
@@ -86,7 +42,8 @@ class Automated:
     accounts_repository = NotImplementedError
     captcha_repository = NotImplementedError
 
-    def __init__(self, transaction_repository, user_repository, invoice_repository, accounts_repository, captcha_repository):
+    def __init__(self, transaction_repository, user_repository, invoice_repository, accounts_repository,
+                 captcha_repository):
         self.transaction_repository = transaction_repository
         self.user_repository = user_repository
         self.invoice_repository = invoice_repository
@@ -100,6 +57,11 @@ class Automated:
             method(args, account, body)
         except:
             print(traceback.print_exc())
+
+    def driver(self):
+        driver = webdriver.Chrome('C:/chromedriver.exe')
+        driver.set_window_position(-1000, 0)
+        return driver
 
     def parse(self, result, saccount, driver=None):
         user = self.user_repository.get_by_id(saccount.user.id)
@@ -213,19 +175,24 @@ class Automated:
 
     def sync_banco_do_brasil(self, args, saccount, _):
         agency, account, password = args
-        driver = webdriver.Chrome('C:/chromedriver.exe')
+        driver = self.driver()
         result = banco_do_brasil.get(driver, agency, account, password)
         self.parse(result, saccount, driver)
 
+    def sync_picpay(self, args, saccount, _):
+        email, password = args
+        result = picpay.get(email, password)
+        self.parse(result, saccount)
+
     def sync_banco_inter(self, args, saccount, isafe):
         account, password = args
-        driver = webdriver.Chrome('C:/chromedriver.exe')
+        driver = self.driver()
         result = banco_inter.get(driver, account, password, isafe)
         self.parse(result, saccount, driver)
 
     def sync_banco_caixa(self, args, saccount, _):
         username, password = args
-        driver = webdriver.Chrome('C:/chromedriver.exe')
+        driver = self.driver()
         result = banco_caixa.get(driver, username, password)
         self.parse(result, saccount, driver)
 
@@ -236,13 +203,13 @@ class Automated:
 
     def sync_sodexo_alimentacao(self, args, saccount, _):
         cartao, cpf = args
-        driver = webdriver.Chrome('C:/chromedriver.exe')
+        driver = self.driver()
         result = sodexo_alimentacao.get(driver, cartao, cpf, self.captcha_repository)
-        self.parse(result, saccount)
+        self.parse(result, saccount, driver)
 
     def sync_banco_itau(self, args, saccount, _):
         agency, account, password = args
-        transactions = banco_itau(agency, account, password)
+        transactions = self.banco_itau(agency, account, password)
         stored_transactions = saccount.transactions
         for transaction in transactions:
             contains = False
@@ -258,3 +225,48 @@ class Automated:
                 transaction.account_id = saccount.id
                 transaction.paid = True
                 print(self.transaction_repository.save(transaction))
+
+    def banco_itau(self, agencia, conta, senha):
+        transactions = []
+        driver = self.driver()
+        try:
+            driver.get("https://www.itau.com.br/")
+            driver.set_window_size(1936, 1066)
+            WebDriverWait(driver, 30000).until(expected_conditions.visibility_of_element_located((By.ID, "agencia")))
+            driver.find_element(By.ID, "agencia").send_keys(agencia)
+            driver.find_element(By.ID, "conta").send_keys(conta)
+            driver.execute_script(
+                "const btn = document.getElementById(\'btnLoginSubmit\');btn.disabled=false;btn.class = \"send active icon-itaufonts_seta_right\"")
+            driver.find_element(By.ID, "btnLoginSubmit").click()
+            WebDriverWait(driver, 30000).until(
+                expected_conditions.presence_of_element_located((By.CSS_SELECTOR, ".tecla:nth-child(1)")))
+            driver.execute_script(
+                "var senha = \"" + senha + "\"; var i = 0; var fn = () => { if (!senha[i]) { document.querySelector('#acessar').click(); return; } [...document.querySelectorAll(\'.tecla\')].filter(t => t.innerText.indexOf(senha[i]) > -1)[0].click();i++;setTimeout(fn, 100) };setTimeout(fn, 100)")
+            time.sleep(5)
+            WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "VerExtrato")))
+            driver.find_element(By.ID, "VerExtrato").click()
+            WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "select-55")))
+            driver.execute_script(
+                "document.querySelector(\"#select-55\").value=90; document.querySelector(\"#select-55\").dispatchEvent(new Event(\"change\"))");
+            time.sleep(5)
+            lines = driver.find_element(By.CSS_SELECTOR,
+                                        "#gridLancamentos-pessoa-fisica").find_elements_by_css_selector(
+                'tr')
+            for line in lines:
+                if line.get_attribute('innerText') is None:
+                    continue
+                columns = line.find_elements_by_css_selector('td')
+                if len(columns) >= 4:
+                    try:
+                        transaction = Transaction()
+                        transaction.value = _parse_brl_to_float(columns[2].get_attribute('innerText'))
+                        transaction.description = _clean_description(columns[1].get_attribute('innerText'))
+                        transaction.date = _parse_dd_mm_yyyy(columns[0].get_attribute('innerText'))
+                        transaction.paid = True
+                        transactions.append(transaction)
+                    except Exception as error_inline:
+                        print('Possible not an error - inline', self.banco_itau.__name__, str(error_inline))
+        except Exception as error:
+            print('Error', self.banco_itau.__name__, str(error))
+        driver.quit()
+        return transactions

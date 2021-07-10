@@ -49,6 +49,7 @@ class AutomatedHandler(RequestHandler, ABC):
         account = self.accounts_repository.get_by_id(int(account_id))
         if account is None or account.user.id is not user.id:
             return self.set_status(401)
+        print('Init', account.description)
         Automated(self.transaction_repository, self.user_repository, self.invoice_repository,
                   self.accounts_repository, self.captcha_repository).run(account, self.request.body)
         self.set_status(200)
