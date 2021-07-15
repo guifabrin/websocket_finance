@@ -50,17 +50,16 @@ class Automated:
         self.accounts_repository = accounts_repository
         self.captcha_repository = captcha_repository
 
-    def run(self, account, body=""):
+    def run(self, account, body="", def_end=None):
         args = account.automated_args.split(',')
         method = getattr(self, args.pop(0))
         try:
-            method(args, account, body)
+            method(args, account, body, def_end)
         except:
             print(traceback.print_exc())
 
     def driver(self):
         driver = webdriver.Chrome('C:/chromedriver.exe')
-        driver.set_window_position(-1000, 0)
         return driver
 
     def parse(self, result, saccount, driver=None):
@@ -173,41 +172,53 @@ class Automated:
         if driver is not None:
             driver.close()
 
-    def sync_banco_do_brasil(self, args, saccount, _):
+    def sync_banco_do_brasil(self, args, saccount, _, def_end):
         agency, account, password = args
         driver = self.driver()
         result = banco_do_brasil.get(driver, agency, account, password)
         self.parse(result, saccount, driver)
+        if def_end is not None:
+            def_end()
 
-    def sync_picpay(self, args, saccount, _):
+    def sync_picpay(self, args, saccount, _, def_end):
         email, password = args
         result = picpay.get(email, password)
         self.parse(result, saccount)
+        if def_end is not None:
+            def_end()
 
-    def sync_banco_inter(self, args, saccount, isafe):
+    def sync_banco_inter(self, args, saccount, isafe, def_end):
         account, password = args
         driver = self.driver()
         result = banco_inter.get(driver, account, password, isafe)
         self.parse(result, saccount, driver)
+        if def_end is not None:
+            def_end()
 
-    def sync_banco_caixa(self, args, saccount, _):
+    def sync_banco_caixa(self, args, saccount, _, def_end):
         username, password = args
         driver = self.driver()
         result = banco_caixa.get(driver, username, password)
         self.parse(result, saccount, driver)
+        if def_end is not None:
+            def_end()
 
-    def sync_banco_nuconta(self, args, saccount, _):
+    def sync_banco_nuconta(self, args, saccount, _, def_end):
         cpf, password = args
         result = banco_nu.get(cpf, password)
         self.parse(result, saccount)
+        if def_end is not None:
+            def_end()
 
-    def sync_sodexo_alimentacao(self, args, saccount, _):
+    def sync_sodexo_alimentacao(self, args, saccount, _, def_end):
         cartao, cpf = args
         driver = self.driver()
         result = sodexo_alimentacao.get(driver, cartao, cpf, self.captcha_repository)
         self.parse(result, saccount, driver)
+        if def_end is not None:
+            def_end()
 
-    def sync_banco_itau(self, args, saccount, _):
+    def sync_banco_itau(self, args, saccount, _, def_end):
         agency, account, password = args
         transactions = self.banco_itau(agency, account, password)
         stored_transactions = saccount.transactions
@@ -225,6 +236,8 @@ class Automated:
                 transaction.account_id = saccount.id
                 transaction.paid = True
                 print(self.transaction_repository.save(transaction))
+        if def_end is not None:
+            def_end()
 
     def banco_itau(self, agencia, conta, senha):
         transactions = []

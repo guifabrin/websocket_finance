@@ -8,11 +8,11 @@ from ..database.database import Session
 
 class BaseRepository:
     entity = NotImplementedError
-    notification_repository = NotImplementedError
+    def_notification = NotImplementedError
 
-    def __init__(self, entity, notification_repository = None):
+    def __init__(self, entity, def_notification=None):
         self.entity = entity
-        self.notification_repository = notification_repository
+        self.def_notification = def_notification
 
     @contextmanager
     def command_session_scope(self):
@@ -25,8 +25,8 @@ class BaseRepository:
             session.rollback()
             raise
         finally:
-            session.expunge_all()
-            session.close()
+            # session.close()
+            pass
 
     @contextmanager
     def query_session_scope(self):
@@ -38,11 +38,12 @@ class BaseRepository:
         except Exception as err:
             raise
         finally:
-            session.close()
+            # session.close()
+            pass
 
     def get_by(self, parameter, value):
         with self.command_session_scope() as session:
-            result = session.query(self.entity).filter(getattr(self.entity, parameter) == value).scalar()
+            result = session.query(self.entity).filter(getattr(self.entity, parameter) == value).all()
             session.commit()
             return result
 
@@ -60,12 +61,12 @@ class BaseRepository:
         with self.command_session_scope() as session:
             session.add(entity)
             session.flush()
-        if self.notification_repository is not None:
-            notification = Notification()
-            notification.date = datetime.datetime.now()
-            notification.table = type(entity).__name__
-            notification.entity_id = entity.id
-            notification.method = 'save'
-            notification.seen = False
-            self.notification_repository.save(notification)
+        if self.def_notification is not None:
+            self.def_notification(entity)
         return entity
+
+    def put(self, entity_id, values):
+        with self.command_session_scope() as session:
+            _entity = session.query(self.entity).get(entity_id)
+            _entity.update(values)
+            return True

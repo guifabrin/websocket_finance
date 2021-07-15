@@ -67,8 +67,9 @@ class User(Base, SerializerMixin):
 
     roles = relationship("RoleUser", back_populates="user", lazy='subquery')
     accounts = relationship("Account", back_populates="user", lazy='subquery')
+    configs = relationship("UserConfig", back_populates="user", lazy='subquery')
 
-    serialize_only = ('id', 'name', 'email', 'picture', 'created_at')
+    serialize_only = ('id', 'name', 'email', 'picture', 'created_at', 'configs')
 
 
 class Account(Base, SerializerMixin):
@@ -87,25 +88,23 @@ class Account(Base, SerializerMixin):
 
     user = relationship('User', lazy='subquery')
 
-    _transactions = relationship("Transaction", back_populates="account", lazy='subquery')
+    transactions = relationship("Transaction", back_populates="account", lazy='subquery')
     invoices = relationship("Invoice", back_populates="account", lazy='subquery')
 
-    serialize_only = (
-        'id', 'description', 'is_credit_card', 'transactions', 'invoices', 'automated', 'automated_body', 'ignore')
+    serialize_only = ('id', 'description', 'is_credit_card', 'automated_body', 'ignore', 'prefer_debit_account_id', 'automated_ref')
 
     @property
-    def transactions(self):
-        if self.is_credit_card:
-            return []
-        else:
-            return self._transactions
+    def automated_ref(self):
+        if self.automated_args is not None:
+            return self.automated_args.split(',')[0]
+        return False
 
-    def update(self, other):
-        if hasattr(other, 'is_credit_card'):
-            self.is_credit_card = 1 if other.is_credit_card else 0
-        if hasattr(other, 'description') and len(other.description) > 0:
-            self.description = other.description
-
+    @property
+    def sort_sum(self):
+        suma = 0.2 if self.is_credit_card  else 0.1
+        sumb = self.prefer_debit_account_id  if self.is_credit_card  else self.id
+        sumc = 1000 if self.ignore else 0
+        return -1* (suma + sumb + sumc)
 
 class Category(Base, SerializerMixin):
     __tablename__ = 'categories'
@@ -176,6 +175,11 @@ class UserConfig(Base, SerializerMixin):
     config = relationship('Config', lazy='subquery')
     user = relationship('User', lazy='subquery')
 
+    serialize_only = ('config', 'value')
+
+    def update(self, obj_values):
+        self.value = obj_values['value']
+
 
 class UserOauth(Base, SerializerMixin):
     __tablename__ = 'user_oauths'
@@ -211,61 +215,30 @@ class Invoice(Base, SerializerMixin):
 
     transactions = relationship("Transaction", back_populates="invoice", lazy='subquery')
 
-    serialize_only = ('id', 'description', 'date_init', 'date_end', 'debit_date', 'transactions', 'automated_id')
+    serialize_only = ('id', 'description', 'date_init', 'date_end', 'debit_date', 'automated_id', 'total', 'total_positive', 'total_negative', 'account')
+
+    def before_invoice(self):
+        invoices = list(filter(lambda invoice: invoice.debit_date < self.debit_date, self.account.invoices))
+        if len(invoices) == 0:
+            return None
+        return invoices[0]
 
     @property
-    def str_debit_date(self):
-        return self.debit_date.strftime("%Y-%m-%d")
-
-    @str_debit_date.setter
-    def str_debit_date(self, str_debit_date):
-        self.debit_date = datetime.strptime(str_debit_date.split('T')[0], '%Y-%m-%d')
+    def total(self):
+        invoice = self.before_invoice()
+        return sum(map(lambda t: t.value, self.transactions)) + (invoice.total if invoice is not None else 0)
 
     @property
-    def str_date_init(self):
-        return self.date_init.strftime("%Y-%m-%d")
-
-    @str_date_init.setter
-    def str_date_init(self, str_date_init):
-        self.date_init = datetime.strptime(str_date_init.split('T')[0], '%Y-%m-%d')
+    def total_positive(self):
+        return sum(map(lambda t: t.value, filter(lambda t: t.value > 0, self.transactions)))
 
     @property
-    def str_date_end(self):
-        return self.date_end.strftime("%Y-%m-%d")
-
-    @str_date_end.setter
-    def str_date_end(self, str_date_end):
-        self.date_end = datetime.strptime(str_date_end.split('T')[0], '%Y-%m-%d')
+    def total_negative(self):
+        return sum(map(lambda t: t.value, filter(lambda t: t.value < 0, self.transactions)))
 
     @property
     def user(self):
-        if self.account:
-            return self.account.user
-        return None
-
-    @user.setter
-    def user(self, user):
-        pass
-
-    @property
-    def user_id(self):
-        if self.user:
-            return self.user.id
-        return None
-
-    def update(self, other):
-        if hasattr(other, 'description'):
-            self.description = other.description
-        if hasattr(other, 'debit_date'):
-            self.debit_date = other.debit_date
-        if hasattr(other, 'date_init'):
-            self.date_init = other.date_init
-        if hasattr(other, 'date_end'):
-            self.date_end = other.date_end
-
-    @property
-    def value(self):
-        return sum(map(lambda t: t.value, self.transactions))
+        return self.account.user
 
 
 class Transaction(Base, SerializerMixin):
@@ -292,39 +265,7 @@ class Transaction(Base, SerializerMixin):
 
     @property
     def user(self):
-        if self.account:
-            return self.account.user
-        return None
-
-    @user.setter
-    def user(self, user):
-        pass
-
-    @property
-    def str_date(self):
-        return self.date.strftime("%Y-%m-%d")
-
-    @str_date.setter
-    def str_date(self, str_date):
-        self.date = datetime.strptime(str_date.split('T')[0], '%Y-%m-%d')
-
-    @property
-    def user_id(self):
-        if self.user:
-            return self.user.id
-        return None
-
-    def update(self, other):
-        if hasattr(other, 'paid'):
-            self.paid = 1 if other.paid else 0
-        if hasattr(other, 'description'):
-            self.description = other.description
-        if hasattr(other, 'date'):
-            self.date = other.date
-        if hasattr(other, 'invoice_id'):
-            self.invoice_id = other.invoice_id
-        if hasattr(other, 'value'):
-            self.value = other.value
+        return self.account.user
 
 
 class CategoryTransaction(Base, SerializerMixin):
@@ -358,3 +299,7 @@ class Captha(Base, SerializerMixin):
     id = Column(Integer, primary_key=True)
     base64_url = Column(String, nullable=False)
     result = Column(Integer, nullable=False)
+
+    def update(self, obj_values):
+        self.result = obj_values['value']
+
