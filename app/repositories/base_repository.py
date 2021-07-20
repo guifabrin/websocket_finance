@@ -1,8 +1,5 @@
-import datetime
-import json
 from contextlib import contextmanager
 
-from ..models import Notification
 from ..database.database import Session
 
 
@@ -36,6 +33,7 @@ class BaseRepository:
         try:
             yield session
         except Exception as err:
+            print(err)
             raise
         finally:
             # session.close()
@@ -69,4 +67,10 @@ class BaseRepository:
         with self.command_session_scope() as session:
             _entity = session.query(self.entity).get(entity_id)
             _entity.update(values)
+            return True
+
+    def delete(self, entity_id):
+        with self.command_session_scope() as session:
+            entity = session.query(self.entity).get(entity_id)
+            session.delete(entity)
             return True

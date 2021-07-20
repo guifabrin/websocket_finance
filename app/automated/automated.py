@@ -63,7 +63,7 @@ class Automated:
         return driver
 
     def parse(self, result, saccount, driver=None):
-        user = self.user_repository.get_by_id(saccount.user.id)
+        user = self.user_repository.get_by_id(saccount.user_id)
         print('Resolved', saccount.description, driver)
         transactions = result['transactions']
         cards = result['cards']
@@ -90,10 +90,10 @@ class Automated:
         for card in cards:
             for invoice in card:
                 saccount_invoices = list(
-                    filter(lambda account: account.description == invoice['cardNumber'], user.accounts))
+                    filter(lambda account: account.description == invoice['cardNumber'], self.accounts_repository.get_by('user_id', user.id)))
                 if len(saccount_invoices) == 0:
                     saccount_invoice = Account()
-                    saccount_invoice.user_id = saccount.user.id
+                    saccount_invoice.user_id = saccount.user_id
                     saccount_invoice.is_credit_card = True
                     saccount_invoice.prefer_debit_account_id = saccount.id
                     saccount_invoice.description = invoice['cardNumber']
@@ -101,7 +101,7 @@ class Automated:
                 else:
                     saccount_invoice = saccount_invoices[0]
 
-                automated_ids = list(map(lambda item: item.automated_id, saccount_invoice._transactions))
+                automated_ids = list(map(lambda item: item.automated_id, saccount_invoice.transactions))
                 stransactions = []
                 for data in invoice['values']:
                     if data['date'] is None:
@@ -131,8 +131,6 @@ class Automated:
                 if len(sinvoices) == 0:
                     sinvoice = Invoice()
                     sinvoice.debit_date = middle_date
-                    sinvoice.date_init = min_date
-                    sinvoice.date_end = max_date
                     sinvoice.account_id = saccount_invoice.id
                     sinvoice.description = 'Automated'
                     print(self.invoice_repository.save(sinvoice))
@@ -152,7 +150,7 @@ class Automated:
                    user.accounts))
         if len(saccounts_cdb) == 0:
             saccount_cdb = Account()
-            saccount_cdb.user_id = saccount.user.id
+            saccount_cdb.user_id = saccount.user_id
             saccount_cdb.prefer_debit_account_id = saccount.id
             saccount_cdb.description = 'CDB Automated'
             print(self.accounts_repository.save(saccount_cdb))
@@ -258,9 +256,9 @@ class Automated:
             time.sleep(5)
             WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "VerExtrato")))
             driver.find_element(By.ID, "VerExtrato").click()
-            WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "select-55")))
+            WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.CSS_SELECTOR, "cpv-select select")))
             driver.execute_script(
-                "document.querySelector(\"#select-55\").value=90; document.querySelector(\"#select-55\").dispatchEvent(new Event(\"change\"))");
+                "document.querySelector(\"cpv-select select\").value=90; document.querySelector(\"cpv-select select\").dispatchEvent(new Event(\"change\"))");
             time.sleep(5)
             lines = driver.find_element(By.CSS_SELECTOR,
                                         "#gridLancamentos-pessoa-fisica").find_elements_by_css_selector(

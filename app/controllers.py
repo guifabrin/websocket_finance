@@ -17,6 +17,9 @@ class MessageResponseEnum(Enum):
     AUTOMATED = 4
     TRANSACTIONS = 6
     INVOICES = 7
+    TRANSACTION = 8
+    ACCOUNT = 11
+    UPDATE = 12
 
 
 class LoginResponseEnum(Enum):
@@ -27,6 +30,10 @@ class LoginResponseEnum(Enum):
 class TransactionTypeEnum(Enum):
     COMMON = 0
     INVOICE = 1
+
+class CrudStatus(Enum):
+    ADD_EDIT = 0
+    REMOVE = 1
 
 
 user_repository = BaseRepository(entity=User)
@@ -78,7 +85,14 @@ def send_notifications_all():
         send_notifications(attr)
 
 
+disabled = False
+
+
 def send_notifications(str_user_id):
+    return
+    global disabled
+    if disabled:
+        return
     notifications = notification_repository.get_all()
     not_seen_notifications = list(filter(lambda notification: not notification.seen, notifications))
     transactions_notifications = []
@@ -134,7 +148,8 @@ def map_accounts(user, year):
                 filtered_not_paid = filter(
                     lambda transaction: transaction.date <= dt_end.date() and not transaction.paid,
                     account.transactions)
-                values.append(sum(map(lambda transaction: transaction.value, filtered_paid)))
+                error = account.value_error if account.value_error is not None else 0
+                values.append(error+sum(map(lambda transaction: transaction.value, filtered_paid)))
                 values_not_paid.append(sum(map(lambda transaction: transaction.value, filtered_not_paid)))
             else:
                 filtered = filter(lambda invoice: dt_init.date() <= invoice.debit_date <= dt_end.date(),
@@ -163,7 +178,20 @@ def year(parsed, websocket, user):
     send_notifications(str(user.id))
 
 
+def finish(user, account):
+    global disabled
+    send_automated_status(
+        str(user.id),
+        account.id,
+        'finish'
+    )
+    send_notifications(str(user.id))
+    disabled = False
+
+
 def automated(parsed, websocket, user):
+    global disabled
+    disabled = True
     accounts = list(filter(lambda account: account.id == parsed['id'], user.accounts))
     for account in accounts:
         send_automated_status(str(user.id), account.id, 'init')
@@ -176,11 +204,7 @@ def automated(parsed, websocket, user):
         ).run(
             account,
             parsed['body'],
-            lambda: send_automated_status(
-                str(user.id),
-                account.id,
-                'finish'
-            ))
+            lambda: finish(user, account))
 
 
 def captcha(parsed, websocket, user):
@@ -194,7 +218,8 @@ def transactions(parsed, websocket, user):
         if parsed['type'] == TransactionTypeEnum.INVOICE.value:
             invoices = list(filter(lambda invoice: invoice.id == parsed['invoiceId'], accounts[0].invoices))
             if len(invoices) > 0:
-                transactions = list(map(lambda transaction: transaction.to_dict(), invoices[0].transactions))
+                transactions = sorted(invoices[0].transactions, key=lambda transaction: transaction.date, reverse=True)
+                transactions = list(map(lambda transaction: transaction.to_dict(), transactions))
                 send(websocket, {
                     'code': MessageResponseEnum.TRANSACTIONS.value,
                     'transactions': transactions
@@ -203,7 +228,8 @@ def transactions(parsed, websocket, user):
             init, end = get_year_periods(parsed['year'])
             filtered = filter(lambda transaction: init[parsed['month'] - 1].date() <= transaction.date <= end[
                 parsed['month'] - 1].date(), accounts[0].transactions)
-            transactions = list(map(lambda transaction: transaction.to_dict(), filtered))
+            transactions = sorted(filtered, key=lambda transaction: transaction.date, reverse=True)
+            transactions = list(map(lambda transaction: transaction.to_dict(), transactions))
             send(websocket, {
                 'code': MessageResponseEnum.TRANSACTIONS.value,
                 'transactions': transactions
@@ -225,13 +251,84 @@ def configs(parsed, websocket, user):
     user_configs_repository.put(list_configs[0].id, parsed)
 
 
+def transaction(parsed, websocket, user):
+    accounts = list(filter(lambda account: account.id == parsed['accountId'], user.accounts))
+    if len(accounts) > 0:
+        if parsed['status'] == CrudStatus.ADD_EDIT.value:
+            if 'id' in parsed:
+                t = transactions_repository.get_by_id(parsed['id'])
+                if t is not None and t.account_id == parsed['accountId']:
+                    transactions_repository.put(parsed['id'], parsed['values'])
+            else:
+                t = Transaction()
+                t.description = parsed['values']['description']
+                t.paid = parsed['values']['paid'] if 'paid' in parsed['values'] else False
+                t.invoice_id = parsed['values']['invoice_id'] if 'invoice_id' in parsed['values'] else None
+                t.account_id = parsed['values']['account_id']
+                t.value = parsed['values']['value']
+                t.date = datetime.datetime.strptime(parsed['values']['date'], '%Y-%m-%d')
+                transactions_repository.save(t)
+        elif parsed['status'] == CrudStatus.REMOVE.value:
+            t = transactions_repository.get_by_id(parsed['id'])
+            if t is not None and t.account_id == parsed['accountId']:
+                transactions_repository.delete(parsed['id'])
+        send(websocket, {
+            'code': MessageResponseEnum.UPDATE.value
+        })
+
+def notification(parsed, websocket, user):
+    notification_repository.put(parsed['id'], {'seen': True})
+    send_notifications(str(user.id))
+
+
+def account(parsed, websocket, user):
+    if parsed['status'] == CrudStatus.ADD_EDIT.value:
+        if 'id' in parsed['value']:
+            accounts_repository.put(parsed['value']['id'], parsed['value'])
+        else:
+            account = Account()
+            account.description = parsed['value']['description']
+            account.is_credit_card = parsed['value']['is_credit_card'] if 'is_credit_card' in parsed['value'] else False
+            account.ignore = parsed['value']['ignore'] if 'ignore' in parsed['value'] else False
+            account.automated_args = parsed['value']['automated_args'] if 'automated_args' in parsed['value'] else ''
+            account.automated_body = parsed['value']['automated_body'] if 'automated_body' in parsed[
+                'value'] else False
+            account.user_id = user.id
+            accounts_repository.save(account)
+    elif parsed['status'] == CrudStatus.REMOVE.value:
+        accounts_repository.delete(parsed['value']['id'])
+    send(websocket, {
+        'code': MessageResponseEnum.UPDATE.value
+    })
+
+
+def invoice(parsed, websocket, user):
+    if parsed['status'] == CrudStatus.ADD_EDIT.value:
+        if 'id' in parsed['values']:
+            invoice_repository.put(parsed['values']['id'], parsed['values'])
+        else:
+            invoice = Invoice()
+            invoice.description = parsed['values']['description']
+            invoice.account_id = parsed['values']['account_id']
+            invoice.debit_date = datetime.datetime.strptime(parsed['values']['debit_date'], '%Y-%m-%d')
+            invoice_repository.save(invoice)
+    elif parsed['status'] == CrudStatus.REMOVE.value:
+        invoice_repository.delete(parsed['id'])
+    send(websocket, {
+        'code': MessageResponseEnum.UPDATE.value
+    })
+
 mapped = {
     2: year,
     4: automated,
     5: captcha,
     6: transactions,
     7: invoices,
-    8: configs
+    8: configs,
+    9: transaction,
+    10: notification,
+    11: account,
+    13: invoice
 }
 
 sockets = {

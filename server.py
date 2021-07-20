@@ -37,5 +37,7 @@ class SimpleEcho(WebSocket):
         print(self.address, 'closed')
 
 
+x = threading.Thread(target=auto_sync)
+x.start()
 server = SimpleWebSocketServer('', 8765, SimpleEcho)
 server.serveforever()

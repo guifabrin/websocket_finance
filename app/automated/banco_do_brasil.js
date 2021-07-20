@@ -64,16 +64,16 @@ window.pybancodobrasil = {
             parse(array) {
                 const parsed = [];
                 for (let [data, a, descricao, b, valor] of array) {
-                    if (descricao == 'Saldo Anterior') {
-                        continue;
-                    }
-                    const [dd, mm, yyyy] = data.split('/');
                     const [strvalor, cd] = valor.split(' ');
-                    parsed.push({
-                        date: new Date(`${yyyy}-${mm}-${dd}`),
-                        value: parseFloat(strvalor.replace('.', '').replace(',', '.')) * (cd == 'C' ? 1 : -1),
-                        description: descricao
-                    })
+                    value = parseFloat(strvalor.replace('.', '').replace(',', '.')) * (cd == 'C' ? 1 : -1)
+                    const [dd, mm, yyyy] = data.split('/');
+                    if (descricao != 'Saldo Anterior') {
+                        parsed.push({
+                            date: new Date(`${yyyy}-${mm}-${dd}`),
+                            value,
+                            description: descricao
+                        })
+                    }
                 }
                 return parsed;
             },

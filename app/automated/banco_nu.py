@@ -18,6 +18,9 @@ def __extratos(nu):
                       'DebitPurchaseEvent', 'DebitWithdrawalEvent', 'BarcodePaymentEvent']
         if statement['__typename'] in debit_list:
             multiplier = -1
+        if 'amount' not  in statement:
+            print(statement)
+            continue
         transactions.append({
             'value': statement['amount'] * multiplier,
             'automated_id': statement['id'],
