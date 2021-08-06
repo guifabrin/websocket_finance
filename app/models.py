@@ -1,10 +1,11 @@
 import datetime
 
-from sqlalchemy import Column, Date, Float, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import Column, Date, Float, ForeignKey, Integer, String, Text, text
 from sqlalchemy.orm import relationship
 from sqlalchemy_serializer import SerializerMixin
 
-from .database.database import Base
+from app.database import Base
+
 
 class Config(Base, SerializerMixin):
     __tablename__ = 'configs'
@@ -43,7 +44,7 @@ class Account(Base, SerializerMixin):
     description = Column(String, nullable=False)
     is_credit_card = Column(Integer, server_default=text("'0'"))
     ignore = Column(Integer, server_default=text("'0'"))
-    value_error = Column(Float, nullable=False)
+    value_error = Column(Float)
 
     automated_args = Column(String, nullable=False)
     automated_body = Column(Integer, server_default=text("'0'"))
@@ -175,7 +176,7 @@ class Transaction(Base, SerializerMixin):
     invoice_id = Column(ForeignKey('invoices.id'))
 
     serialize_only = (
-    'id', 'description', 'date', 'paid', 'value', 'automated_id', 'account_id', 'sinvoices', 'invoice_id')
+        'id', 'description', 'date', 'paid', 'value', 'automated_id', 'account_id', 'sinvoices', 'invoice_id')
 
     account = relationship('Account', lazy='subquery',
                            back_populates="transactions",
@@ -195,7 +196,7 @@ class Transaction(Base, SerializerMixin):
         self.paid = obj_values['paid'] if 'paid' in obj_values else self.paid
         self.value = obj_values['value'] if 'value' in obj_values else self.value
         self.invoice_id = obj_values['invoice_id'] if 'invoice_id' in obj_values else self.invoice_id
-        self.date = datetime.datetime.strptime(obj_values['date'], '%Y-%m-%d') if 'date' in obj_values else self.date
+        self.date = datetime.datetime.strptime(obj_values['date'], '%Y-%m-%d').date() if 'date' in obj_values else self.date
         self.description = obj_values['description'] if 'description' in obj_values else self.description
 
     @property
@@ -204,20 +205,9 @@ class Transaction(Base, SerializerMixin):
             return self.account.sinvoices
         return []
 
-
-class Notification(Base, SerializerMixin):
-    __tablename__ = 'notifications'
-
-    id = Column(Integer, primary_key=True)
-    table = Column(String, nullable=False)
-    entity_id = Column(Integer, nullable=False)
-    method = Column(String, nullable=False)
-    date = Column(Date, nullable=False)
-    seen = Column(Integer, nullable=True, server_default=text("'0'"))
-
-    def update(self, obj_values):
-        if 'seen' in obj_values:
-            self.seen = obj_values['seen']
+    @property
+    def normalized_date(self):
+        return self.date.date if isinstance(self.date, datetime.datetime) else self.date
 
 
 class Captha(Base, SerializerMixin):

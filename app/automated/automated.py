@@ -6,13 +6,16 @@ import traceback
 from datetime import datetime
 
 from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.wait import WebDriverWait
 
-from app.automated import banco_do_brasil, banco_inter, banco_caixa, banco_nu, sodexo_alimentacao, picpay
+from app.automated import banco_nu, sodexo_alimentacao, picpay
 from app.models import Transaction, Account, Invoice
+
+import pybancodobrasil
+import pycaixafederal
+import pybancointer
 
 now = datetime.now()
 
@@ -59,10 +62,10 @@ class Automated:
             print(traceback.print_exc())
 
     def driver(self):
-        driver = webdriver.Chrome('C:/chromedriver.exe')
-        return driver
+        return webdriver.Chrome('C:\\Users\\FrancGui\\Documents\\projects\\personal\\websocket_finance\\chromedriver.exe')
 
     def parse(self, result, saccount, driver=None):
+        account_id = saccount.id
         user = self.user_repository.get_by_id(saccount.user_id)
         print('Resolved', saccount.description, driver)
         transactions = result['transactions']
@@ -76,7 +79,7 @@ class Automated:
                 if automated_id in automated_ids:
                     continue
                 stransaction = Transaction()
-                stransaction.account_id = saccount.id
+                stransaction.account_id = account_id
                 stransaction.automated_id = automated_id
                 if transaction['date'] is None:
                     continue
@@ -95,7 +98,7 @@ class Automated:
                     saccount_invoice = Account()
                     saccount_invoice.user_id = saccount.user_id
                     saccount_invoice.is_credit_card = True
-                    saccount_invoice.prefer_debit_account_id = saccount.id
+                    saccount_invoice.prefer_debit_account_id = account_id
                     saccount_invoice.description = invoice['cardNumber']
                     print(self.accounts_repository.save(saccount_invoice))
                 else:
@@ -123,8 +126,6 @@ class Automated:
                 if len(stransactions) == 0:
                     continue
                 dates = list(map(lambda transaction: transaction.date, stransactions))
-                min_date = min(dates)
-                max_date = max(dates)
                 middle_date = datetime.strptime(invoice['date'], '%Y-%m-%dT%H:%M:%S.%fZ')
                 sinvoices = list(filter(lambda sinvoice: (sinvoice.debit_date - middle_date.date()).days == 0,
                                         saccount_invoice.invoices))
@@ -146,12 +147,12 @@ class Automated:
             return
         saccounts_cdb = list(
             filter(lambda
-                       account: account.description == 'CDB Automated' and saccount.id == account.prefer_debit_account_id,
+                       account: account.description == 'CDB Automated' and account_id == account.prefer_debit_account_id,
                    user.accounts))
         if len(saccounts_cdb) == 0:
             saccount_cdb = Account()
             saccount_cdb.user_id = saccount.user_id
-            saccount_cdb.prefer_debit_account_id = saccount.id
+            saccount_cdb.prefer_debit_account_id = account_id
             saccount_cdb.description = 'CDB Automated'
             print(self.accounts_repository.save(saccount_cdb))
         else:
@@ -172,9 +173,8 @@ class Automated:
 
     def sync_banco_do_brasil(self, args, saccount, _, def_end):
         agency, account, password = args
-        driver = self.driver()
-        result = banco_do_brasil.get(driver, agency, account, password)
-        self.parse(result, saccount, driver)
+        result = pybancodobrasil.get(agency, account, password)
+        self.parse(result, saccount)
         if def_end is not None:
             def_end()
 
@@ -187,17 +187,15 @@ class Automated:
 
     def sync_banco_inter(self, args, saccount, isafe, def_end):
         account, password = args
-        driver = self.driver()
-        result = banco_inter.get(driver, account, password, isafe)
-        self.parse(result, saccount, driver)
+        result = pybancointer.get(account, password, isafe)
+        self.parse(result, saccount)
         if def_end is not None:
             def_end()
 
     def sync_banco_caixa(self, args, saccount, _, def_end):
         username, password = args
-        driver = self.driver()
-        result = banco_caixa.get(driver, username, password)
-        self.parse(result, saccount, driver)
+        result = pycaixafederal.get(username, password)
+        self.parse(result, saccount)
         if def_end is not None:
             def_end()
 
@@ -217,6 +215,7 @@ class Automated:
             def_end()
 
     def sync_banco_itau(self, args, saccount, _, def_end):
+        account_id = saccount.id
         agency, account, password = args
         transactions = self.banco_itau(agency, account, password)
         stored_transactions = saccount.transactions
@@ -231,7 +230,7 @@ class Automated:
                     contains = True
                     break
             if not contains:
-                transaction.account_id = saccount.id
+                transaction.account_id = account_id
                 transaction.paid = True
                 print(self.transaction_repository.save(transaction))
         if def_end is not None:
@@ -254,12 +253,13 @@ class Automated:
             driver.execute_script(
                 "var senha = \"" + senha + "\"; var i = 0; var fn = () => { if (!senha[i]) { document.querySelector('#acessar').click(); return; } [...document.querySelectorAll(\'.tecla\')].filter(t => t.innerText.indexOf(senha[i]) > -1)[0].click();i++;setTimeout(fn, 100) };setTimeout(fn, 100)")
             time.sleep(5)
-            WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.ID, "VerExtrato")))
+            WebDriverWait(driver, 100).until(expected_conditions.presence_of_element_located((By.ID, "VerExtrato")))
             driver.find_element(By.ID, "VerExtrato").click()
-            WebDriverWait(driver, 5).until(expected_conditions.presence_of_element_located((By.CSS_SELECTOR, "cpv-select select")))
+            WebDriverWait(driver, 100).until(expected_conditions.presence_of_element_located((By.CSS_SELECTOR, "cpv-select select")))
+            time.sleep(5)
             driver.execute_script(
                 "document.querySelector(\"cpv-select select\").value=90; document.querySelector(\"cpv-select select\").dispatchEvent(new Event(\"change\"))");
-            time.sleep(5)
+            time.sleep(10)
             lines = driver.find_element(By.CSS_SELECTOR,
                                         "#gridLancamentos-pessoa-fisica").find_elements_by_css_selector(
                 'tr')

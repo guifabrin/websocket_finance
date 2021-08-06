@@ -1,7 +1,7 @@
 **/__pycache__/
 .vscode
-database.sqlite
+database.sqlite*
 venv/
 /.automated
 /.idea/
-/app/automated/chromedriver.exe
+chromedriver.exe
