@@ -9,7 +9,7 @@ psutil==5.8.0
 pynubank==2.15.0
 requests==2.25.1
 websockets==10.0
-httplib2==0.19.1
+httplib2==0.20.1
 jsmin==3.0.0
 pyadbautomator==0.0.8
 SimpleWebSocketServer==0.1.1
