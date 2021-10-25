@@ -10,7 +10,7 @@ pynubank==2.12.1
 requests==2.25.1
 websockets==10.0
 httplib2==0.19.1
-jsmin==2.2.2
+jsmin==3.0.0
 pyadbautomator==0.0.8
 SimpleWebSocketServer==0.1.1
 pybancodobrasil==0.0.3
