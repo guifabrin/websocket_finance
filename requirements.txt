@@ -13,7 +13,7 @@ httplib2==0.20.2
 jsmin==3.0.0
 pyadbautomator==0.0.8
 SimpleWebSocketServer==0.1.1
-pybancodobrasil==0.0.3
+pybancodobrasil==0.1.6
 pycaixafederal==0.0.4
 pybancointer==0.0.1
-pybancodobrasil==0.0.3
+pybancodobrasil==0.1.6
