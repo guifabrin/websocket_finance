@@ -1,4 +1,4 @@
-SQLAlchemy==1.4.29
+SQLAlchemy==1.4.35
 SQLAlchemy-serializer==1.4.1
 tornado==6.1
 tornado-sqlalchemy==0.7.0
